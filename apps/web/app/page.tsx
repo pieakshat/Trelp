@@ -59,6 +59,16 @@ const questions = [
 
 const tickerText =
   "SENIOR FIRST · JUNIOR RESIDUAL · FIXED EPOCHS · TRANSPARENT WATERFALL ·";
+const tickerItems = [
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+] as const;
 
 export default function HomePage() {
   return (
@@ -135,8 +145,13 @@ export default function HomePage() {
 
       <div className="ticker" aria-hidden="true">
         <div className="tickerTrack">
-          <span>{tickerText}</span>
-          <span>{tickerText}</span>
+          {["first", "second"].map((group) => (
+            <div className="tickerGroup" key={group}>
+              {tickerItems.map((item) => (
+                <span key={`${group}-${item}`}>{tickerText}</span>
+              ))}
+            </div>
+          ))}
         </div>
       </div>
 

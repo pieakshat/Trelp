@@ -328,7 +328,12 @@ em {
   width: max-content;
 }
 
-.tickerTrack span {
+.tickerGroup {
+  display: flex;
+  flex: none;
+}
+
+.tickerGroup span {
   flex: none;
   padding-right: 2.4em;
 }
@@ -851,53 +856,319 @@ footer {
 
 /* Product app */
 
-.appShell {
+.appFrame {
   background: #f3efe9;
-  min-height: 100vh;
-}
-
-.appHeader {
-  align-items: center;
-  background: var(--paper);
-  border-bottom: 1px solid var(--line);
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  height: 72px;
-  padding: 0 clamp(20px, 4vw, 60px);
+  grid-template-columns: 250px minmax(0, 1fr);
+  min-height: 100vh;
+  transition: grid-template-columns 180ms ease;
 }
 
-.appHeader nav {
+.appFrame.sidebarCollapsed {
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
+.appSidebar {
+  background: var(--ink);
+  color: white;
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  height: 100svh;
+  padding: 24px 18px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
 }
 
-.appHeader nav a,
-.connectButton {
-  border: 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 10px 14px;
+.sidebarLogo {
+  align-items: center;
+  display: flex;
+  font-size: 14px;
+  font-weight: 800;
+  gap: 12px;
+  letter-spacing: 0.12em;
+  padding: 8px 10px 32px;
   text-decoration: none;
 }
 
-.appHeader nav .appNavActive {
-  background: #e5ddd4;
-  color: var(--ink);
+.sidebarBrandMark {
+  color: #ff5069;
+  flex: none;
+  height: 28px;
+  width: 28px;
+}
+
+.appSidebar nav {
+  display: grid;
+  gap: 6px;
+}
+
+.appSidebar nav a {
+  align-items: center;
+  color: #b8aaad;
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 14px;
+  min-height: 44px;
+  padding: 0 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.appSidebar nav a:hover,
+.appSidebar nav .sidebarLinkActive {
+  background: rgb(255 255 255 / 10%);
+  color: white;
+}
+
+.sidebarNavIcon {
+  flex: none;
+  height: 20px;
+  width: 20px;
+}
+
+.sidebarFoot {
+  border-top: 1px solid rgb(255 255 255 / 14%);
+  color: #8f7f83;
+  display: grid;
+  font-size: 10px;
+  gap: 14px;
+  margin-top: auto;
+  padding-top: 18px;
+  text-transform: uppercase;
+}
+
+.sidebarFoot button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  gap: 14px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.sidebarCollapseIcon {
+  fill: none;
+  flex: none;
+  height: 18px;
+  stroke: currentColor;
+  width: 18px;
+}
+
+.sidebarCollapsed .sidebarWord {
+  display: none;
+}
+
+.appMain {
+  min-width: 0;
+}
+
+.appTopbar {
+  align-items: center;
+  backdrop-filter: blur(16px);
+  background: rgb(248 245 239 / 88%);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  height: 68px;
+  padding: 0 clamp(20px, 4vw, 60px);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.appTopbar > strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .connectButton {
   background: var(--red);
+  border: 0;
   color: white;
   cursor: pointer;
   justify-self: end;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 11px 15px;
   text-transform: uppercase;
+}
+
+.mobileMenuButton,
+.sidebarOverlay {
+  display: none;
+}
+
+.appPage {
+  background: #f3efe9;
+  min-height: calc(100svh - 68px);
 }
 
 .appContent {
   margin: 0 auto;
   max-width: 1440px;
   padding: clamp(36px, 6vw, 84px) clamp(20px, 4vw, 60px) 80px;
+}
+
+.simpleAppPage {
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: clamp(50px, 7vw, 96px) clamp(20px, 5vw, 72px) 80px;
+}
+
+.simpleAppPage > h1 {
+  font-size: clamp(64px, 8vw, 118px);
+  line-height: 0.86;
+  margin-bottom: 64px;
+}
+
+.pageLead {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.65;
+  margin: -34px 0 52px;
+  max-width: 640px;
+}
+
+.summaryGrid {
+  border: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 28px;
+}
+
+.summaryGrid article {
+  border-right: 1px solid var(--line);
+  padding: 26px;
+}
+
+.summaryGrid article:last-child {
+  border-right: 0;
+}
+
+.summaryLabel,
+.settingsLabel {
+  color: var(--muted);
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summaryGrid strong {
+  display: block;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 42px;
+  font-weight: 400;
+  margin-top: 32px;
+}
+
+.emptyState {
+  align-items: start;
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 330px;
+  padding: clamp(28px, 5vw, 64px);
+}
+
+.emptyState h2 {
+  font-size: clamp(42px, 5vw, 72px);
+  line-height: 0.95;
+}
+
+.emptyState p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.emptyStateLink {
+  background: var(--red);
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  margin-top: auto;
+  padding: 14px 18px;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.vaultForm {
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 28px;
+  max-width: 760px;
+  padding: clamp(26px, 5vw, 56px);
+}
+
+.vaultForm label {
+  color: var(--muted);
+  display: grid;
+  font-size: 11px;
+  gap: 10px;
+  text-transform: uppercase;
+}
+
+.vaultForm select,
+.formInput {
+  background: white;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font: inherit;
+  min-height: 50px;
+  padding: 0 14px;
+  width: 100%;
+}
+
+.formInput {
+  align-items: center;
+  display: flex;
+}
+
+.formInput input {
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  font: inherit;
+  outline: 0;
+  width: 100%;
+}
+
+.vaultForm button {
+  background: var(--ink);
+  border: 0;
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  min-height: 50px;
+  text-transform: uppercase;
+}
+
+.vaultForm > p {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 0;
+}
+
+.settingsList {
+  border-top: 1px solid var(--line);
+}
+
+.settingsList > div {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding: 24px 0;
+}
+
+.settingsList strong {
+  font-size: 13px;
 }
 
 .appHero {
@@ -946,7 +1217,7 @@ footer {
   border-right: 1px solid var(--line);
 }
 
-.choiceGuide span {
+.choiceLabel {
   color: var(--red);
   font-size: 10px;
   font-weight: 700;
@@ -1171,12 +1442,56 @@ footer {
 }
 
 @media (max-width: 860px) {
-  .appHeader {
-    grid-template-columns: 1fr auto;
+  .appFrame,
+  .appFrame.sidebarCollapsed {
+    display: block;
   }
 
-  .appHeader nav {
-    display: none;
+  .appSidebar {
+    left: 0;
+    position: fixed;
+    top: 0;
+    transform: translateX(-100%);
+    transition: transform 180ms ease;
+    width: 250px;
+  }
+
+  .sidebarMobileOpen .appSidebar {
+    transform: translateX(0);
+  }
+
+  .sidebarOverlay {
+    background: rgb(23 0 6 / 45%);
+    border: 0;
+    inset: 0;
+    position: fixed;
+    z-index: 35;
+  }
+
+  .sidebarMobileOpen .sidebarOverlay {
+    display: block;
+  }
+
+  .appTopbar {
+    grid-template-columns: auto 1fr auto;
+    gap: 16px;
+  }
+
+  .mobileMenuButton {
+    background: transparent;
+    border: 0;
+    display: block;
+    height: 38px;
+    padding: 8px;
+    width: 38px;
+  }
+
+  .mobileMenuButton svg {
+    fill: none;
+    height: 100%;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    width: 100%;
   }
 
   .appHero {
@@ -1212,6 +1527,23 @@ footer {
 }
 
 @media (max-width: 560px) {
+  .simpleAppPage > h1 {
+    font-size: 58px;
+  }
+
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .summaryGrid article {
+    border-bottom: 1px solid var(--line);
+    border-right: 0;
+  }
+
+  .summaryGrid article:last-child {
+    border-bottom: 0;
+  }
+
   .appHero h1 {
     font-size: 58px;
   }
@@ -1254,9 +1586,10 @@ footer {
 }
 
 .backLink {
+  display: inline-block;
   font-size: 11px;
   font-weight: 700;
-  justify-self: center;
+  margin-bottom: 44px;
   text-decoration: none;
   text-transform: uppercase;
 }

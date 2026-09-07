@@ -10,24 +10,7 @@ const metrics = [
 
 export default function AppPage() {
   return (
-    <main className="appShell">
-      <header className="appHeader">
-        <a aria-label="Trelp landing page" className="logo" href="/">
-          <BrandMark />
-          <span>TRELP</span>
-        </a>
-        <nav aria-label="Application navigation">
-          <a className="appNavActive" href="/app">
-            Markets
-          </a>
-          <a href="#portfolio">Portfolio</a>
-          <a href="#activity">Activity</a>
-        </nav>
-        <button className="connectButton" type="button">
-          Connect wallet
-        </button>
-      </header>
-
+    <main className="appPage">
       <div className="appContent">
         <section className="appHero">
           <div>
@@ -46,12 +29,12 @@ export default function AppPage() {
 
         <section className="choiceGuide" aria-label="Risk level guide">
           <article>
-            <span>Senior</span>
+            <span className="choiceLabel">Senior</span>
             <h2>Lower risk</h2>
             <p>Senior gets paid first from the available vault value.</p>
           </article>
           <article>
-            <span>Junior</span>
+            <span className="choiceLabel">Junior</span>
             <h2>More upside</h2>
             <p>
               Junior takes the first loss and receives the value that remains.

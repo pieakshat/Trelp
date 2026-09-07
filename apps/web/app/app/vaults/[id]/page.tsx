@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { ArrowMark, BrandMark } from "@/components/brand-mark";
+import { ArrowMark } from "@/components/brand-mark";
 
 const vaults = {
   "BTC-30D-S": {
@@ -36,20 +36,10 @@ export default async function VaultPage({
 
   return (
     <main className="vaultDetail">
-      <header className="appHeader">
-        <a aria-label="Trelp landing page" className="logo" href="/">
-          <BrandMark />
-          <span>TRELP</span>
-        </a>
-        <a className="backLink" href="/app">
-          ← All vaults
-        </a>
-        <button className="connectButton" type="button">
-          Connect wallet
-        </button>
-      </header>
-
       <div className="vaultDetailBody">
+        <a className="backLink" href="/app">
+          ← All markets
+        </a>
         <p className="appEyebrow">Market {id}</p>
         <div className="vaultDetailTitle">
           <h1>
