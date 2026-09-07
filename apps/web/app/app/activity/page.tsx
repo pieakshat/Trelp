@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function ActivityPage() {
   return (
     <main className="appPage">
@@ -7,9 +9,9 @@ export default function ActivityPage() {
         <section className="emptyState">
           <h2>No activity yet.</h2>
           <p>Your deposits, withdrawals, and settlements will appear here.</p>
-          <a className="emptyStateLink" href="/app">
+          <Link className="emptyStateLink" href="/app">
             Explore markets
-          </a>
+          </Link>
         </section>
       </div>
     </main>

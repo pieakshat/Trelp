@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowMark } from "@/components/brand-mark";
 
@@ -37,9 +38,9 @@ export default async function VaultPage({
   return (
     <main className="vaultDetail">
       <div className="vaultDetailBody">
-        <a className="backLink" href="/app">
+        <Link className="backLink" href="/app">
           ← All markets
-        </a>
+        </Link>
         <p className="appEyebrow">Market {id}</p>
         <div className="vaultDetailTitle">
           <h1>

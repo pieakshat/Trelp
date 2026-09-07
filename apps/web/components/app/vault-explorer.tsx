@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   useVaultFilterStore,
   type VaultFilter,
@@ -115,13 +116,13 @@ export function VaultExplorer() {
           {visibleVaults.map((vault) => (
             <tr className="vaultRow" key={vault.id}>
               <td>
-                <a className="marketCell" href={`/app/vaults/${vault.id}`}>
+                <Link className="marketCell" href={`/app/vaults/${vault.id}`}>
                   <i>{vault.asset.slice(0, 1)}</i>
                   <span>
                     <strong>{vault.asset}</strong>
                     <small>{vault.tranche} · Ends in 30 days</small>
                   </span>
-                </a>
+                </Link>
               </td>
               <td className="apy">{vault.apy}</td>
               <td>{vault.cushion}</td>

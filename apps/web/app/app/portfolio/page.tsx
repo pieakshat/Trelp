@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const positions = [
   ["Deposited", "$0.00"],
   ["Current value", "$0.00"],
@@ -21,9 +23,9 @@ export default function PortfolioPage() {
         <section className="emptyState">
           <h2>No deposits yet.</h2>
           <p>Your active and completed vaults will appear here.</p>
-          <a className="emptyStateLink" href="/app">
+          <Link className="emptyStateLink" href="/app">
             Explore markets
-          </a>
+          </Link>
         </section>
       </div>
     </main>

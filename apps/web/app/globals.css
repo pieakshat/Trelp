@@ -887,8 +887,15 @@ footer {
   font-weight: 800;
   gap: 12px;
   letter-spacing: 0.12em;
-  padding: 8px 10px 32px;
+  padding: 8px 10px;
   text-decoration: none;
+}
+
+.sidebarHead {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 28px;
 }
 
 .sidebarBrandMark {
@@ -931,24 +938,23 @@ footer {
 .sidebarFoot {
   border-top: 1px solid rgb(255 255 255 / 14%);
   color: #8f7f83;
-  display: grid;
   font-size: 10px;
-  gap: 14px;
   margin-top: auto;
   padding-top: 18px;
   text-transform: uppercase;
 }
 
-.sidebarFoot button {
+.sidebarCollapseButton {
   align-items: center;
   background: transparent;
   border: 0;
   color: white;
   cursor: pointer;
   display: flex;
-  gap: 14px;
-  padding: 8px 10px;
-  text-align: left;
+  height: 34px;
+  justify-content: center;
+  padding: 8px;
+  width: 34px;
 }
 
 .sidebarCollapseIcon {
@@ -961,6 +967,14 @@ footer {
 
 .sidebarCollapsed .sidebarWord {
   display: none;
+}
+
+.sidebarCollapsed .sidebarLogo {
+  display: none;
+}
+
+.sidebarCollapsed .sidebarHead {
+  justify-content: center;
 }
 
 .appMain {
@@ -1012,19 +1026,22 @@ footer {
 .appContent {
   margin: 0 auto;
   max-width: 1440px;
-  padding: clamp(36px, 6vw, 84px) clamp(20px, 4vw, 60px) 80px;
+  padding: clamp(32px, 4vw, 56px) clamp(20px, 4vw, 60px) 72px;
 }
 
 .simpleAppPage {
   margin: 0 auto;
   max-width: 1180px;
-  padding: clamp(50px, 7vw, 96px) clamp(20px, 5vw, 72px) 80px;
+  padding: clamp(40px, 5vw, 64px) clamp(20px, 5vw, 72px) 72px;
 }
 
 .simpleAppPage > h1 {
-  font-size: clamp(64px, 8vw, 118px);
-  line-height: 0.86;
-  margin-bottom: 64px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: clamp(44px, 5vw, 68px);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  margin-bottom: 48px;
 }
 
 .pageLead {
@@ -1062,10 +1079,8 @@ footer {
 
 .summaryGrid strong {
   display: block;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 42px;
-  font-weight: 400;
-  margin-top: 32px;
+  font-size: 32px;
+  margin-top: 24px;
 }
 
 .emptyState {
@@ -1078,8 +1093,11 @@ footer {
 }
 
 .emptyState h2 {
-  font-size: clamp(42px, 5vw, 72px);
-  line-height: 0.95;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: clamp(30px, 4vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
 }
 
 .emptyState p {
@@ -1176,7 +1194,7 @@ footer {
   display: grid;
   gap: 50px;
   grid-template-columns: 1.25fr 0.75fr;
-  margin-bottom: 66px;
+  margin-bottom: 42px;
 }
 
 .appEyebrow {
@@ -1190,8 +1208,11 @@ footer {
 }
 
 .appHero h1 {
-  font-size: clamp(62px, 7vw, 110px);
-  line-height: 0.82;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: clamp(44px, 5vw, 72px);
+  font-weight: 700;
+  letter-spacing: -0.055em;
+  line-height: 0.96;
 }
 
 .appHero > p {
@@ -1226,11 +1247,11 @@ footer {
 }
 
 .choiceGuide h2 {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(34px, 4vw, 58px);
-  font-weight: 400;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: clamp(28px, 3vw, 38px);
+  font-weight: 700;
   letter-spacing: -0.05em;
-  margin: 38px 0 12px;
+  margin: 28px 0 12px;
 }
 
 .choiceGuide p {
@@ -1269,9 +1290,7 @@ footer {
 
 .metricGrid strong {
   display: block;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 38px;
-  font-weight: 400;
+  font-size: 30px;
   letter-spacing: -0.04em;
   margin: 26px 0 8px;
 }
@@ -1389,9 +1408,8 @@ footer {
 
 .apy {
   color: var(--red);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 19px;
-  font-weight: 400;
+  font-size: 17px;
+  font-weight: 700;
 }
 
 .sparkline {
@@ -1454,6 +1472,10 @@ footer {
     transform: translateX(-100%);
     transition: transform 180ms ease;
     width: 250px;
+  }
+
+  .sidebarCollapseButton {
+    display: none;
   }
 
   .sidebarMobileOpen .appSidebar {
@@ -1609,8 +1631,11 @@ footer {
 }
 
 .vaultDetailTitle h1 {
-  font-size: clamp(64px, 8vw, 120px);
-  line-height: 0.82;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: clamp(48px, 6vw, 80px);
+  font-weight: 700;
+  letter-spacing: -0.055em;
+  line-height: 0.95;
 }
 
 .vaultDetailGrid {
@@ -1638,8 +1663,8 @@ footer {
 }
 
 .vaultTerms dd {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 28px;
+  font-size: 22px;
+  font-weight: 700;
   margin: 0;
 }
 
@@ -1667,8 +1692,8 @@ footer {
   background: transparent;
   border: 0;
   color: white;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 40px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 32px;
   min-width: 0;
   outline: none;
   width: 100%;

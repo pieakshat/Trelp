@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
@@ -66,10 +67,26 @@ export function AppShell({ children }: { children: ReactNode }) {
         type="button"
       />
       <aside className="appSidebar">
-        <a aria-label="Trelp home" className="sidebarLogo" href="/">
-          <BrandMark className="sidebarBrandMark" />
-          <span className="sidebarWord">TRELP</span>
-        </a>
+        <div className="sidebarHead">
+          <Link aria-label="Trelp home" className="sidebarLogo" href="/">
+            <BrandMark className="sidebarBrandMark" />
+            <span className="sidebarWord">TRELP</span>
+          </Link>
+          <button
+            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+            className="sidebarCollapseButton"
+            onClick={toggleCollapsed}
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              className="sidebarCollapseIcon"
+              viewBox="0 0 24 24"
+            >
+              <path d={collapsed ? "m9 5 7 7-7 7" : "m15 5-7 7 7 7"} />
+            </svg>
+          </button>
+        </div>
 
         <nav aria-label="Application navigation">
           {navigation.map(([label, href, icon]) => {
@@ -79,7 +96,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 : pathname.startsWith(href);
 
             return (
-              <a
+              <Link
                 aria-current={active ? "page" : undefined}
                 className={active ? "sidebarLinkActive" : undefined}
                 href={href}
@@ -88,25 +105,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 <NavIcon name={icon} />
                 <span className="sidebarWord">{label}</span>
-              </a>
+              </Link>
             );
           })}
         </nav>
 
         <div className="sidebarFoot">
           <span className="sidebarWord">Preview mode</span>
-          <button onClick={toggleCollapsed} type="button">
-            <svg
-              aria-hidden="true"
-              className="sidebarCollapseIcon"
-              viewBox="0 0 24 24"
-            >
-              <path d={collapsed ? "m9 5 7 7-7 7" : "m15 5-7 7 7 7"} />
-            </svg>
-            <span className="sidebarWord">
-              {collapsed ? "Expand" : "Collapse"}
-            </span>
-          </button>
         </div>
       </aside>
 
