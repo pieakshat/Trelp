@@ -323,7 +323,7 @@ em {
 }
 
 .tickerTrack {
-  animation: ticker 18s linear infinite;
+  animation: ticker 52s linear infinite;
   display: flex;
   width: max-content;
 }
