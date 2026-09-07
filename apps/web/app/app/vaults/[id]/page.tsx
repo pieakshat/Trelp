@@ -50,7 +50,7 @@ export default async function VaultPage({
       </header>
 
       <div className="vaultDetailBody">
-        <p className="appEyebrow">Vault / {id}</p>
+        <p className="appEyebrow">Market {id}</p>
         <div className="vaultDetailTitle">
           <h1>
             {vault.asset}
@@ -62,18 +62,18 @@ export default async function VaultPage({
 
         <section className="vaultDetailGrid">
           <div className="vaultTerms">
-            <p className="sectionIndex">[ CURRENT TERMS ]</p>
+            <p className="sectionLabel">Current terms</p>
             <dl>
               <div>
-                <dt>Target APY</dt>
+                <dt>Estimated APY</dt>
                 <dd>{vault.return}</dd>
               </div>
               <div>
-                <dt>Junior cushion</dt>
+                <dt>Loss buffer</dt>
                 <dd>{vault.cushion}</dd>
               </div>
               <div>
-                <dt>Epoch</dt>
+                <dt>Time left</dt>
                 <dd>30 days</dd>
               </div>
               <div>
@@ -84,7 +84,7 @@ export default async function VaultPage({
           </div>
 
           <aside className="depositCard">
-            <p className="sectionIndex">[ ENTER VAULT ]</p>
+            <p className="sectionLabel">Deposit</p>
             <label htmlFor="deposit">Deposit amount</label>
             <div className="amountInput">
               <input disabled id="deposit" placeholder="0.00" />
@@ -98,8 +98,7 @@ export default async function VaultPage({
               Connect wallet to continue <ArrowMark className="depositArrow" />
             </button>
             <p>
-              Illustrative terms only. Returns are variable and capital is at
-              risk.
+              These values are examples. Returns can change. You can lose money.
             </p>
           </aside>
         </section>

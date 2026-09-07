@@ -80,8 +80,8 @@ export function VaultExplorer() {
     <section className="explorer" aria-labelledby="vaults-title">
       <div className="explorerHeader">
         <div>
-          <p className="appEyebrow">Live markets</p>
-          <h2 id="vaults-title">Vaults</h2>
+          <p className="appEyebrow">Compare your options</p>
+          <h2 id="vaults-title">Markets</h2>
         </div>
         <fieldset className="filters">
           <legend className="srOnly">Filter vaults</legend>
@@ -104,10 +104,10 @@ export function VaultExplorer() {
         <thead>
           <tr className="vaultRow vaultTableHead">
             <th scope="col">Market</th>
-            <th scope="col">Target APY</th>
-            <th scope="col">Protection</th>
-            <th scope="col">Capacity</th>
-            <th scope="col">30D shape</th>
+            <th scope="col">Estimated APY</th>
+            <th scope="col">Loss buffer</th>
+            <th scope="col">Deposited</th>
+            <th scope="col">30-day trend</th>
             <th scope="col">Status</th>
           </tr>
         </thead>
@@ -119,7 +119,7 @@ export function VaultExplorer() {
                   <i>{vault.asset.slice(0, 1)}</i>
                   <span>
                     <strong>{vault.asset}</strong>
-                    <small>{vault.tranche} · 30 days</small>
+                    <small>{vault.tranche} · Ends in 30 days</small>
                   </span>
                 </a>
               </td>

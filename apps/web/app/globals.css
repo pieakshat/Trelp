@@ -174,7 +174,7 @@ svg {
 }
 
 .kicker,
-.sectionIndex {
+.sectionLabel {
   font-family: "Courier New", Courier, monospace;
   font-size: 11px;
   font-weight: 700;
@@ -345,10 +345,16 @@ em {
 }
 
 .sectionIntro {
+  align-items: end;
   display: grid;
-  gap: 32px;
-  grid-template-columns: 0.5fr 1.4fr 0.8fr;
+  gap: clamp(40px, 8vw, 140px);
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
   margin-bottom: 90px;
+}
+
+.sectionLabel {
+  color: var(--red);
+  margin: 0 0 28px;
 }
 
 .sectionIntro h2,
@@ -376,19 +382,12 @@ em {
 
 .principle {
   border-right: 1px solid var(--line);
-  min-height: 360px;
+  min-height: 300px;
   padding: 28px;
 }
 
 .principle:last-child {
   border-right: 0;
-}
-
-.principle > span,
-.step > span {
-  color: var(--red);
-  font-family: "Courier New", Courier, monospace;
-  font-size: 11px;
 }
 
 .principle h3,
@@ -398,7 +397,7 @@ em {
   font-size: clamp(36px, 4vw, 64px);
   font-weight: 400;
   letter-spacing: -0.055em;
-  margin: 70px 0 10px;
+  margin: 28px 0 10px;
 }
 
 .principle strong {
@@ -426,6 +425,10 @@ em {
 
 .sectionIntroLight > p:last-child {
   color: rgb(255 255 255 / 72%);
+}
+
+.sectionIntroLight .sectionLabel {
+  color: #ffc0ca;
 }
 
 .featureSplit {
@@ -487,7 +490,7 @@ em {
 .step {
   display: grid;
   gap: 24px;
-  grid-template-columns: 56px 0.7fr 1fr;
+  grid-template-columns: 0.7fr 1fr;
   padding: 30px 0;
   border-bottom: 1px solid var(--line);
 }
@@ -534,6 +537,111 @@ em {
   text-transform: uppercase;
 }
 
+.claritySection,
+.faqSection {
+  display: grid;
+  gap: clamp(54px, 9vw, 150px);
+  grid-template-columns: 0.8fr 1.2fr;
+  padding: clamp(90px, 12vw, 180px) clamp(24px, 6vw, 90px);
+}
+
+.claritySection {
+  background: var(--ink);
+  color: white;
+}
+
+.clarityIntro h2,
+.faqIntro h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(54px, 6.5vw, 100px);
+  font-weight: 400;
+  letter-spacing: -0.06em;
+  line-height: 0.9;
+  margin: 0;
+}
+
+.clarityIntro > p:last-child {
+  color: #b8a9ac;
+  line-height: 1.6;
+  margin-top: 30px;
+  max-width: 360px;
+}
+
+.clarityGrid {
+  border-top: 1px solid rgb(255 255 255 / 22%);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 0;
+}
+
+.clarityGrid > div {
+  border-bottom: 1px solid rgb(255 255 255 / 22%);
+  padding: 28px 24px 34px 0;
+}
+
+.clarityGrid > div:nth-child(odd) {
+  border-right: 1px solid rgb(255 255 255 / 22%);
+}
+
+.clarityGrid > div:nth-child(even) {
+  padding-left: 24px;
+}
+
+.clarityGrid dt {
+  color: #ff8697;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.clarityGrid dd {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(28px, 3vw, 44px);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  margin: 50px 0 0;
+}
+
+.faqSection {
+  background: var(--paper);
+}
+
+.faqList {
+  border-top: 1px solid var(--line);
+}
+
+.faqList details {
+  border-bottom: 1px solid var(--line);
+  padding: 26px 0;
+}
+
+.faqList summary {
+  cursor: pointer;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(26px, 3vw, 40px);
+  letter-spacing: -0.035em;
+  list-style: none;
+}
+
+.faqList summary::after {
+  color: var(--red);
+  content: "+";
+  float: right;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.faqList details[open] summary::after {
+  content: "−";
+}
+
+.faqList p {
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 20px 0 0;
+  max-width: 620px;
+}
+
 .riskStats strong {
   font-size: 12px;
   text-transform: uppercase;
@@ -576,7 +684,7 @@ em {
   color: white;
 }
 
-.finalCta > div > p:not(.sectionIndex) {
+.finalCta > div > p:not(.sectionLabel) {
   color: rgb(255 255 255 / 72%);
   margin-bottom: 38px;
 }
@@ -617,7 +725,9 @@ footer {
   .hero,
   .featureSplit,
   .howSection,
-  .riskSection {
+  .riskSection,
+  .claritySection,
+  .faqSection {
     grid-template-columns: 1fr;
   }
 
@@ -659,7 +769,7 @@ footer {
   }
 
   .principle h3 {
-    margin-top: 46px;
+    margin-top: 22px;
   }
 }
 
@@ -698,11 +808,19 @@ footer {
   }
 
   .step {
-    grid-template-columns: 38px 1fr;
+    grid-template-columns: 1fr;
   }
 
-  .step p {
-    grid-column: 2;
+  .clarityGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .clarityGrid > div:nth-child(odd) {
+    border-right: 0;
+  }
+
+  .clarityGrid > div:nth-child(even) {
+    padding-left: 0;
   }
 
   footer {
@@ -811,6 +929,44 @@ footer {
   line-height: 1.6;
   margin: 0;
   max-width: 410px;
+}
+
+.choiceGuide {
+  border: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 28px;
+}
+
+.choiceGuide article {
+  padding: clamp(24px, 3vw, 42px);
+}
+
+.choiceGuide article:first-child {
+  border-right: 1px solid var(--line);
+}
+
+.choiceGuide span {
+  color: var(--red);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.choiceGuide h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(34px, 4vw, 58px);
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  margin: 38px 0 12px;
+}
+
+.choiceGuide p {
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 420px;
 }
 
 .metricGrid {
@@ -1058,6 +1214,15 @@ footer {
 @media (max-width: 560px) {
   .appHero h1 {
     font-size: 58px;
+  }
+
+  .choiceGuide {
+    grid-template-columns: 1fr;
+  }
+
+  .choiceGuide article:first-child {
+    border-bottom: 1px solid var(--line);
+    border-right: 0;
   }
 
   .explorerHeader {

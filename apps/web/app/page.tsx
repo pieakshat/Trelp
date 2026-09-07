@@ -9,38 +9,52 @@ import { RangeGraphic, WaterfallGraphic } from "@/components/product-graphics";
 
 const principles = [
   {
-    description:
-      "Priority settlement and a defined cushion before loss reaches your capital.",
-    index: "01",
+    description: "Gets paid first from the available vault value.",
     label: "Senior",
-    outcome: "Protected yield",
+    outcome: "Lower risk",
   },
   {
-    description:
-      "First-loss exposure in return for the fees left after the senior claim is paid.",
-    index: "02",
+    description: "Takes the first loss and receives the value that remains.",
     label: "Junior",
-    outcome: "Levered fees",
+    outcome: "Higher upside",
   },
   {
-    description:
-      "Fixed epochs make the protection visible, measurable, and honest at entry.",
-    index: "03",
-    label: "Epochs",
-    outcome: "Known terms",
+    description: "Uses one pool, one price range, and one end date.",
+    label: "Shared vault",
+    outcome: "Same market",
   },
 ] as const;
 
 const steps = [
+  ["Choose", "Choose Senior for lower risk or Junior for more upside."],
+  ["Deposit", "Add funds to one shared LP vault."],
+  ["Settle", "At the end date, Senior gets paid first. Junior gets the rest."],
+] as const;
+
+const vaultFacts = [
+  ["Risk level", "Senior or Junior"],
+  ["Loss buffer", "The amount Junior covers first"],
+  ["End date", "The date when the vault settles"],
+  ["Payment order", "Who gets paid first"],
+] as const;
+
+const questions = [
   [
-    "Choose",
-    "Pick the risk you actually want: payment priority or residual upside.",
+    "What is a tranched LP vault?",
+    "It is one LP position split into Senior and Junior risk levels.",
   ],
   [
-    "Fund",
-    "Both sides subscribe against the same pool, range, and settlement date.",
+    "What does Senior receive?",
+    "Senior receives payment first from the available vault value.",
   ],
-  ["Settle", "At epoch close, value flows through one transparent waterfall."],
+  [
+    "What does Junior receive?",
+    "Junior takes the first loss and receives the value left after Senior is paid.",
+  ],
+  [
+    "Can I lose money?",
+    "Yes. The loss buffer can reduce risk, but it cannot remove all risk.",
+  ],
 ] as const;
 
 const tickerText =
@@ -68,7 +82,7 @@ export default function HomePage() {
       <section className="hero" id="top">
         <div className="heroCopy">
           <Reveal>
-            <p className="kicker">Liquidity infrastructure / 001</p>
+            <p className="kicker">A simpler way to choose LP risk</p>
           </Reveal>
           <Reveal delay={0.08}>
             <h1>
@@ -79,8 +93,8 @@ export default function HomePage() {
           </Reveal>
           <Reveal className="heroBottom" delay={0.16}>
             <p>
-              One LP position. Two precise claims. Choose payment priority or
-              take first loss for the residual upside.
+              One LP position has two risk levels. Choose lower risk or more
+              upside.
             </p>
             <a className="button buttonDark" href="#structure">
               See the structure <ArrowMark />
@@ -128,15 +142,17 @@ export default function HomePage() {
 
       <section className="section" id="structure">
         <Reveal className="sectionIntro">
-          <p className="sectionIndex">[ 01 / THE STRUCTURE ]</p>
-          <h2>
-            One market.
-            <br />
-            Two ways in.
-          </h2>
+          <div>
+            <p className="sectionLabel">Two risk levels</p>
+            <h2>
+              One pool.
+              <br />
+              Two choices.
+            </h2>
+          </div>
           <p>
-            LP returns bundle fee income and drawdown together. Trelp separates
-            those claims so capital can choose its own place in the stack.
+            Trelp splits one LP position into Senior and Junior. You choose the
+            risk level that fits you.
           </p>
         </Reveal>
 
@@ -147,7 +163,6 @@ export default function HomePage() {
               delay={index * 0.08}
               key={principle.label}
             >
-              <span>{principle.index}</span>
               <h3>{principle.label}</h3>
               <strong>{principle.outcome}</strong>
               <p>{principle.description}</p>
@@ -158,12 +173,15 @@ export default function HomePage() {
 
       <section className="redSection" id="mechanism">
         <Reveal className="sectionIntro sectionIntroLight">
-          <p className="sectionIndex">[ 02 / THE MECHANISM ]</p>
-          <h2>
-            The waterfall
-            <br />
-            does the work.
-          </h2>
+          <div>
+            <p className="sectionLabel">Payment order</p>
+            <h2>
+              Senior first.
+              <br />
+              Junior next.
+            </h2>
+          </div>
+          <p>Both risk levels use the same vault value and end date.</p>
         </Reveal>
         <div className="featureSplit">
           <Reveal className="graphicCard">
@@ -171,11 +189,10 @@ export default function HomePage() {
           </Reveal>
           <Reveal className="featureCopy" delay={0.1}>
             <p className="kicker">Settlement order</p>
-            <h3>Senior gets paid first. Junior owns what remains.</h3>
+            <h3>Senior gets paid first. Junior gets the rest.</h3>
             <p>
-              Every epoch closes against one NAV. The senior claim is resolved
-              first; residual value belongs to junior. If value falls far
-              enough, junior absorbs the loss before senior is impaired.
+              The vault uses one final value. Senior receives payment first.
+              Junior receives the value that remains and takes the first loss.
             </p>
             <a className="textLink" href="#risk">
               Read the risk boundary <ArrowMark />
@@ -186,17 +203,16 @@ export default function HomePage() {
 
       <section className="section howSection">
         <Reveal className="sectionIntro compactIntro">
-          <p className="sectionIndex">[ 03 / HOW IT WORKS ]</p>
+          <p className="sectionLabel">How it works</p>
           <h2>
-            Three moves.
+            Choose.
             <br />
-            No mystery.
+            Deposit. Settle.
           </h2>
         </Reveal>
         <div className="steps">
           {steps.map(([title, description], index) => (
             <Reveal className="step" delay={index * 0.1} key={title}>
-              <span>0{index + 1}</span>
               <h3>{title}</h3>
               <p>{description}</p>
             </Reveal>
@@ -206,24 +222,23 @@ export default function HomePage() {
 
       <section className="riskSection" id="risk">
         <Reveal className="riskCopy">
-          <p className="sectionIndex">[ 04 / RISK, PLAINLY ]</p>
+          <p className="sectionLabel">Risk</p>
           <h2>
-            Protection has
-            <br />a visible edge.
+            Know where
+            <br /> protection ends.
           </h2>
           <p>
-            Junior capital is a cushion, not a guarantee. A large gap, failed
-            exit, oracle fault, or exhausted buffer can still impair senior.
-            Trelp shows the boundary before capital enters.
+            Junior funds cover losses first. This buffer can run out. Senior
+            funds can still lose value.
           </p>
           <div className="riskStats">
             <div>
               <span>Range</span>
-              <strong>Static per epoch</strong>
+              <strong>Fixed for each vault</strong>
             </div>
             <div>
               <span>Terms</span>
-              <strong>Known at entry</strong>
+              <strong>Shown before deposit</strong>
             </div>
             <div>
               <span>Returns</span>
@@ -237,16 +252,47 @@ export default function HomePage() {
         </Reveal>
       </section>
 
+      <section className="claritySection">
+        <Reveal className="clarityIntro">
+          <p className="sectionLabel">What you see</p>
+          <h2>Know the terms before you deposit.</h2>
+          <p>Each vault shows the facts that affect your risk and return.</p>
+        </Reveal>
+        <dl className="clarityGrid">
+          {vaultFacts.map(([term, description], index) => (
+            <Reveal delay={index * 0.06} key={term}>
+              <dt>{term}</dt>
+              <dd>{description}</dd>
+            </Reveal>
+          ))}
+        </dl>
+      </section>
+
+      <section className="faqSection">
+        <Reveal className="faqIntro">
+          <p className="sectionLabel">Questions</p>
+          <h2>Clear answers.</h2>
+        </Reveal>
+        <div className="faqList">
+          {questions.map(([question, answer]) => (
+            <details key={question}>
+              <summary>{question}</summary>
+              <p>{answer}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
       <section className="finalCta" id="vaults">
         <Reveal>
           <BrandMark className="ctaMark" />
-          <p className="sectionIndex">[ CURATED MARKETS / COMING SOON ]</p>
+          <p className="sectionLabel">Explore the first markets</p>
           <h2>
-            Pick your
+            Choose your
             <br />
-            <em>place in line.</em>
+            <em>risk level.</em>
           </h2>
-          <p>Starting with one transparent ETH / USDC epoch.</p>
+          <p>Compare Senior and Junior vaults in one place.</p>
           <a className="button buttonLight" href="/app">
             Explore vaults <ArrowMark />
           </a>
