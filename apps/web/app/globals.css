@@ -130,7 +130,8 @@ svg {
   background: #780014;
   display: grid;
   grid-template-columns: 1.02fr 0.98fr;
-  min-height: 100vh;
+  height: 100svh;
+  min-height: 640px;
   overflow: hidden;
   position: relative;
 }
@@ -166,7 +167,8 @@ svg {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: clamp(120px, 11vw, 164px) clamp(30px, 5vw, 78px) 56px;
+  padding: clamp(108px, 14vh, 150px) clamp(30px, 5vw, 78px)
+    clamp(30px, 6vh, 56px);
   position: relative;
   z-index: 2;
 }
@@ -189,7 +191,7 @@ h2 {
 }
 
 h1 {
-  font-size: clamp(68px, 8.4vw, 144px);
+  font-size: clamp(64px, min(8.4vw, 13vh), 144px);
   line-height: 0.78;
   margin-left: -0.06em;
   max-width: 920px;
@@ -247,7 +249,7 @@ em {
   background: transparent;
   display: flex;
   justify-content: center;
-  min-height: 720px;
+  min-height: 0;
   overflow: hidden;
   position: relative;
   z-index: 2;
@@ -619,12 +621,17 @@ footer {
     grid-template-columns: 1fr;
   }
 
+  .hero {
+    height: auto;
+    min-height: 100svh;
+  }
+
   .heroCopy {
     min-height: 670px;
   }
 
   .heroVisual {
-    min-height: 680px;
+    min-height: min(680px, 78svh);
   }
 
   .heroArtwork {
@@ -683,7 +690,7 @@ footer {
   }
 
   .heroVisual {
-    min-height: 520px;
+    min-height: min(520px, 68svh);
   }
 
   .heroArtwork {

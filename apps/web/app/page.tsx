@@ -96,7 +96,7 @@ export default function HomePage() {
               fill
               priority
               sizes="(max-width: 800px) 100vw, 50vw"
-              src="/trelp-rider.png"
+              src="/trelp-rider-transparent.png"
             />
           </HeroArtwork>
           <svg aria-hidden="true" className="orbit" viewBox="0 0 640 640">
