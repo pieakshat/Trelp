@@ -205,12 +205,51 @@ em {
 
 .heroVisual {
   align-items: center;
-  background: var(--red);
+  background: #780014;
   display: flex;
   justify-content: center;
   min-height: 720px;
   overflow: hidden;
   position: relative;
+}
+
+.heroVisual::before {
+  animation: heroGradient 13s ease-in-out infinite alternate;
+  background:
+    radial-gradient(circle at 18% 24%, #ff405f 0 12%, transparent 38%),
+    radial-gradient(circle at 82% 18%, #e6002d 0 11%, transparent 36%),
+    radial-gradient(circle at 68% 78%, #ff6a76 0 9%, transparent 34%),
+    radial-gradient(circle at 28% 82%, #980018 0 18%, transparent 43%),
+    linear-gradient(135deg, #5b000d 0%, #d00025 52%, #720010 100%);
+  content: "";
+  filter: saturate(1.18);
+  inset: -22%;
+  position: absolute;
+  transform: rotate(-7deg) scale(1.08);
+}
+
+.heroVisual::after {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.28'/%3E%3C/svg%3E");
+  content: "";
+  inset: 0;
+  mix-blend-mode: soft-light;
+  opacity: 0.34;
+  pointer-events: none;
+  position: absolute;
+}
+
+@keyframes heroGradient {
+  0% {
+    transform: rotate(-7deg) scale(1.08) translate3d(-3%, -2%, 0);
+  }
+
+  50% {
+    transform: rotate(4deg) scale(1.2) translate3d(5%, 2%, 0);
+  }
+
+  100% {
+    transform: rotate(-2deg) scale(1.12) translate3d(-1%, 6%, 0);
+  }
 }
 
 .visualLabel {
@@ -226,17 +265,25 @@ em {
 }
 
 .heroArtwork {
-  height: min(74vw, 820px);
+  background: white;
+  box-shadow: 0 28px 80px rgb(42 0 8 / 28%);
+  height: min(68vw, 760px);
   max-height: 88%;
-  max-width: 92%;
-  mix-blend-mode: screen;
+  max-width: 88%;
   position: relative;
-  width: min(56vw, 840px);
+  width: min(50vw, 760px);
   z-index: 2;
 }
 
 .heroArtwork img {
   object-fit: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroVisual::before,
+  .ticker div {
+    animation: none;
+  }
 }
 
 .orbit {

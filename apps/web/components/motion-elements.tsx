@@ -52,23 +52,10 @@ export function HeroArtwork({ children }: { children: ReactNode }) {
 
   return (
     <motion.div
-      animate={{ y: [0, -10, 0], rotate: [0, -0.5, 0] }}
+      animate={{ filter: "blur(0px)", opacity: 1, scale: 1 }}
       className="heroArtwork"
-      initial={{ opacity: 0, scale: 0.92 }}
-      transition={{
-        opacity: { duration: 0.9 },
-        rotate: {
-          duration: 7,
-          ease: "easeInOut",
-          repeat: Number.POSITIVE_INFINITY,
-        },
-        scale: { duration: 0.9, ease: [0.22, 1, 0.36, 1] },
-        y: {
-          duration: 7,
-          ease: "easeInOut",
-          repeat: Number.POSITIVE_INFINITY,
-        },
-      }}
+      initial={{ filter: "blur(12px)", opacity: 0, scale: 1.06 }}
+      transition={{ duration: 1.15, ease: [0.22, 1, 0.36, 1] }}
     >
       {children}
     </motion.div>
