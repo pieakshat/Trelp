@@ -290,15 +290,14 @@ em {
 }
 
 .heroArtwork img {
-  filter: contrast(1.12) saturate(0.9);
-  mix-blend-mode: multiply;
+  filter: brightness(0) invert(1);
   object-fit: contain;
-  opacity: 0.9;
+  opacity: 0.78;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .hero::before,
-  .ticker div {
+  .tickerTrack {
     animation: none;
   }
 }
@@ -321,9 +320,15 @@ em {
   white-space: nowrap;
 }
 
-.ticker div {
-  animation: ticker 24s linear infinite;
+.tickerTrack {
+  animation: ticker 18s linear infinite;
+  display: flex;
   width: max-content;
+}
+
+.tickerTrack span {
+  flex: none;
+  padding-right: 2.4em;
 }
 
 @keyframes ticker {
@@ -708,7 +713,7 @@ footer {
     scroll-behavior: auto;
   }
 
-  .ticker div {
+  .tickerTrack {
     animation: none;
   }
 

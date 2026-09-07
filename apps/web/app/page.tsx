@@ -43,6 +43,9 @@ const steps = [
   ["Settle", "At epoch close, value flows through one transparent waterfall."],
 ] as const;
 
+const tickerText =
+  "SENIOR FIRST · JUNIOR RESIDUAL · FIXED EPOCHS · TRANSPARENT WATERFALL ·";
+
 export default function HomePage() {
   return (
     <main>
@@ -117,10 +120,9 @@ export default function HomePage() {
       </section>
 
       <div className="ticker" aria-hidden="true">
-        <div>
-          SENIOR FIRST · JUNIOR RESIDUAL · FIXED EPOCHS · TRANSPARENT WATERFALL
-          · SENIOR FIRST · JUNIOR RESIDUAL · FIXED EPOCHS · TRANSPARENT
-          WATERFALL ·
+        <div className="tickerTrack">
+          <span>{tickerText}</span>
+          <span>{tickerText}</span>
         </div>
       </div>
 
