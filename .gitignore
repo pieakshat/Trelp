@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnp.*
+
+# Next.js and monorepo output
+.next/
+out/
+dist/
+build/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Hosting
+.vercel/
+
+# Foundry output
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
