@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 
-import {TickMath} from "v4-core/src/libraries/TickMath.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 
 import {RangeMath} from "../src/libraries/RangeMath.sol";
 
@@ -41,11 +41,25 @@ contract RangeMathTest is Test {
         assertGt(a1, 0);
     }
 
-    function test_floorHelperMatchesEvaluatingAtTheLowerBound() public view {
-        (uint256 f0, uint256 f1) = RangeMath.amountsAtFloor(sqrtLower, sqrtUpper, L);
-        (uint256 a0, uint256 a1) = RangeMath.amountsForLiquidity(sqrtLower, sqrtLower, sqrtUpper, L);
-        assertEq(f0, a0);
-        assertEq(f1, a1);
+    /// @notice The bound the covenant reads flips with token ordering. Reading the lower tick
+    ///         unconditionally would measure the SAFE end of the range whenever the risky asset is
+    ///         currency1, and pass a covenant that protects nothing.
+    function test_riskyBoundFollowsTokenOrdering() public view {
+        // risky is currency0: it gets cheaper as price falls, so the exposed bound is the lower one
+        (uint256 c0a, uint256 c0b) = RangeMath.amountsAtRiskyBound(sqrtLower, sqrtUpper, L, true);
+        (uint256 lowA, uint256 lowB) = RangeMath.amountsForLiquidity(sqrtLower, sqrtLower, sqrtUpper, L);
+        assertEq(c0a, lowA);
+        assertEq(c0b, lowB);
+        assertGt(c0a, 0);
+        assertEq(c0b, 0, "fully in currency0 at the lower bound");
+
+        // risky is currency1: it gets cheaper as price RISES, so the exposed bound is the upper one
+        (uint256 c1a, uint256 c1b) = RangeMath.amountsAtRiskyBound(sqrtLower, sqrtUpper, L, false);
+        (uint256 upA, uint256 upB) = RangeMath.amountsForLiquidity(sqrtUpper, sqrtLower, sqrtUpper, L);
+        assertEq(c1a, upA);
+        assertEq(c1b, upB);
+        assertEq(c1a, 0, "fully in currency1 at the upper bound");
+        assertGt(c1b, 0);
     }
 
     /// @notice Why the covenant is written against the floor rather than spot: below the lower
