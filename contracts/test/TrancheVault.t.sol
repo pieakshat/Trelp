@@ -10,7 +10,15 @@ import {IPositionVenue} from "../src/interfaces/IPositionVenue.sol";
 import {IQuoteOracle} from "../src/interfaces/IQuoteOracle.sol";
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 import {RiskPolicy} from "../src/libraries/RiskPolicy.sol";
-import {MockAqua, MockBufferStrategy, MockERC20, MockOracle, MockPositionVenue} from "./mocks/Mocks.sol";
+import {ISpotSwapper} from "../src/interfaces/ISpotSwapper.sol";
+import {
+    MockAqua,
+    MockBufferStrategy,
+    MockERC20,
+    MockOracle,
+    MockPositionVenue,
+    MockSpotSwapper
+} from "./mocks/Mocks.sol";
 
 contract TrancheVaultTest is Test {
     uint256 constant WAD = 1e18;
@@ -26,6 +34,7 @@ contract TrancheVaultTest is Test {
     MockPositionVenue position;
     MockAqua aqua;
     MockBufferStrategy strategy;
+    MockSpotSwapper swapper;
 
     address curator = address(0xC0);
     address alice = address(0xA1); // senior
@@ -55,6 +64,7 @@ contract TrancheVaultTest is Test {
             bufferShipShareWad: bufferShipShareWad,
             bufferCallCoverageWad: 0.1e18,
             minRebalanceCoverageWad: 0.2e18,
+            liquidationSlippageWad: 0.01e18,
             risk: RiskPolicy.Params({
                 baseSpreadWad: 0.0005e18,
                 alphaWad: 2e18,
@@ -74,8 +84,13 @@ contract TrancheVaultTest is Test {
         vault = new TrancheVault(quote, risky, IQuoteOracle(address(oracle)), IAquaRegistry(address(aqua)), curator, cfg);
         position = new MockPositionVenue(quote, address(vault));
         strategy = new MockBufferStrategy(address(0xA99A), address(quote), address(risky));
+        swapper = new MockSpotSwapper(oracle, quote, risky);
         vm.prank(curator);
-        vault.setVenues(IPositionVenue(address(position)), IBufferStrategy(address(strategy)));
+        vault.setVenues(
+            IPositionVenue(address(position)),
+            IBufferStrategy(address(strategy)),
+            ISpotSwapper(address(swapper))
+        );
     }
 
     function _subscribe() internal {
@@ -375,6 +390,55 @@ contract TrancheVaultTest is Test {
         vault.beginSettlement();
         vm.expectRevert(abi.encodeWithSelector(TrancheVault.RiskyInventoryOutstanding.selector, 1e18));
         vault.settle();
+    }
+
+    /// @notice Unwinding the position returns both currencies and the buffer may have been filled
+    ///         into risky, so settlement has to be able to convert. Without `liquidate` the vault
+    ///         sits in `Unwinding` with no reachable exit and deposits are locked for good.
+    function test_settlementCompletesWithRiskyInventory() public {
+        _activate();
+        risky.mint(address(vault), 10e18); // inventory the epoch left behind
+
+        vm.warp(subEnd + T);
+        vault.beginSettlement();
+
+        vm.expectRevert(abi.encodeWithSelector(TrancheVault.RiskyInventoryOutstanding.selector, 10e18));
+        vault.settle();
+
+        // Anyone may clear it — settlement must not depend on the curator staying alive.
+        vm.prank(alice);
+        uint256 received = vault.liquidate(10e18);
+        assertGt(received, 0, "sold at the mark");
+        assertEq(risky.balanceOf(address(vault)), 0, "inventory cleared");
+
+        vault.settle();
+        assertEq(uint8(vault.phase()), uint8(TrancheVault.Phase.Settled));
+
+        vm.prank(alice);
+        assertGt(vault.redeemSenior(S0), 0, "senior can exit");
+    }
+
+    /// @notice A permissionless sale is only safe if it cannot be pushed through at a bad price.
+    function test_liquidateFloorsTheSaleAgainstTheMark() public {
+        _activate();
+        risky.mint(address(vault), 10e18);
+        vm.warp(subEnd + T);
+        vault.beginSettlement();
+
+        swapper.setFillRate(0.97e18); // 3% below the mark, floor allows 1%
+        vm.expectRevert();
+        vault.liquidate(10e18);
+
+        swapper.setFillRate(0.995e18); // inside the floor
+        vault.liquidate(10e18);
+        assertEq(risky.balanceOf(address(vault)), 0);
+    }
+
+    function test_liquidateOnlyDuringUnwinding() public {
+        _activate();
+        risky.mint(address(vault), 1e18);
+        vm.expectRevert(TrancheVault.WrongPhase.selector);
+        vault.liquidate(1e18);
     }
 
     function test_settlementBlockedBeforeEpochEnd() public {

@@ -20,7 +20,8 @@ import {IPositionVenue} from "../src/interfaces/IPositionVenue.sol";
 import {IQuoteOracle} from "../src/interfaces/IQuoteOracle.sol";
 import {IVaultPolicy} from "../src/interfaces/IVaultPolicy.sol";
 import {RiskPolicy} from "../src/libraries/RiskPolicy.sol";
-import {MockERC20, MockOracle, MockPositionVenue} from "./mocks/Mocks.sol";
+import {ISpotSwapper} from "../src/interfaces/ISpotSwapper.sol";
+import {MockERC20, MockOracle, MockPositionVenue, MockSpotSwapper} from "./mocks/Mocks.sol";
 
 /// @notice The five demo paths. Same vault, same parameters, five price and flow scenarios.
 ///
@@ -51,6 +52,7 @@ contract DemoPathsTest is Test {
     TrancheVault vault;
     BufferStrategy strategy;
     SolvencyAdjuster adjuster;
+    MockSpotSwapper swapper;
 
     address curator = address(0xC0);
     address alice = address(0xA1);
@@ -81,6 +83,7 @@ contract DemoPathsTest is Test {
 
         oracle = new MockOracle();
         oracle.setPrice(address(risky), START_PRICE);
+        swapper = new MockSpotSwapper(oracle, quote, risky);
     }
 
     // ---------------------------------------------------------------- harness
@@ -96,6 +99,7 @@ contract DemoPathsTest is Test {
             bufferShipShareWad: bufferShareWad,
             bufferCallCoverageWad: 0.1e18,
             minRebalanceCoverageWad: 0.2e18,
+            liquidationSlippageWad: 0.01e18,
             risk: RiskPolicy.Params({
                 baseSpreadWad: 0.003e18,
                 alphaWad: 2e18,
@@ -130,7 +134,11 @@ contract DemoPathsTest is Test {
         );
 
         vm.prank(curator);
-        vault.setVenues(IPositionVenue(address(position)), IBufferStrategy(address(strategy)));
+        vault.setVenues(
+            IPositionVenue(address(position)),
+            IBufferStrategy(address(strategy)),
+            ISpotSwapper(address(swapper))
+        );
 
         quote.mint(alice, S0);
         quote.mint(bob, J0);
@@ -208,14 +216,8 @@ contract DemoPathsTest is Test {
         o.riskyConverted = risky.balanceOf(address(vault));
 
         vault.beginSettlement();
-        // Settlement liquidates the risky leg at the mark; the unwind window is where a real
-        // deployment would quote it out instead.
         uint256 bal = risky.balanceOf(address(vault));
-        if (bal != 0) {
-            vm.prank(address(vault));
-            risky.transfer(address(0xdead), bal);
-            quote.mint(address(vault), oracle.valueInQuote(address(risky), bal));
-        }
+        if (bal != 0) vault.liquidate(bal);
         vault.settle();
 
         o.nav = vault.navAtSettlement();

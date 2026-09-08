@@ -7,6 +7,7 @@ import {IAquaRegistry} from "../../src/interfaces/IAquaRegistry.sol";
 import {IBufferStrategy} from "../../src/interfaces/IBufferStrategy.sol";
 import {IPositionVenue} from "../../src/interfaces/IPositionVenue.sol";
 import {IQuoteOracle} from "../../src/interfaces/IQuoteOracle.sol";
+import {ISpotSwapper} from "../../src/interfaces/ISpotSwapper.sol";
 
 contract MockERC20 is ERC20 {
     constructor(string memory n, string memory s, uint8 d) ERC20(n, s, d) {}
@@ -139,5 +140,42 @@ contract MockBufferStrategy is IBufferStrategy {
         amounts[0] = quoteAmount;
         strategy = abi.encode(app, quote, risky, quoteAmount);
         return (app, strategy, tokens, amounts);
+    }
+}
+
+/// @dev Fills either direction at the oracle mark, scaled by `fillRateWad`. On a fork this stands
+///      in for existing ETH/USDC liquidity; the fill rate is what lets tests push a settlement sale
+///      below the vault's floor.
+contract MockSpotSwapper is ISpotSwapper {
+    MockOracle public immutable oracle;
+    MockERC20 public immutable quote;
+    MockERC20 public immutable risky;
+
+    uint256 public fillRateWad = 1e18;
+
+    constructor(MockOracle oracle_, MockERC20 quote_, MockERC20 risky_) {
+        oracle = oracle_;
+        quote = quote_;
+        risky = risky_;
+    }
+
+    function setFillRate(uint256 fillRateWad_) external {
+        fillRateWad = fillRateWad_;
+    }
+
+    function swapExactIn(address tokenIn, address, uint256 amountIn, uint256 minOut)
+        external
+        returns (uint256 amountOut)
+    {
+        if (tokenIn == address(quote)) {
+            quote.transferFrom(msg.sender, address(this), amountIn);
+            amountOut = ((amountIn * 1e18) / oracle.priceWad(address(risky)) * fillRateWad) / 1e18;
+            risky.mint(msg.sender, amountOut);
+        } else {
+            risky.transferFrom(msg.sender, address(this), amountIn);
+            amountOut = (oracle.valueInQuote(address(risky), amountIn) * fillRateWad) / 1e18;
+            quote.mint(msg.sender, amountOut);
+        }
+        require(amountOut >= minOut, "MockSpotSwapper: minOut");
     }
 }

@@ -20,31 +20,11 @@ import {IBufferStrategy} from "../src/interfaces/IBufferStrategy.sol";
 import {IPositionVenue} from "../src/interfaces/IPositionVenue.sol";
 import {IQuoteOracle} from "../src/interfaces/IQuoteOracle.sol";
 import {RiskPolicy} from "../src/libraries/RiskPolicy.sol";
-import {ISpotSwapper, V4PositionVenue} from "../src/venues/V4PositionVenue.sol";
+import {ISpotSwapper} from "../src/interfaces/ISpotSwapper.sol";
+import {V4PositionVenue} from "../src/venues/V4PositionVenue.sol";
 import {IVaultPolicy} from "../src/interfaces/IVaultPolicy.sol";
 import {TrancheHook} from "../src/venues/TrancheHook.sol";
-import {MockAqua, MockBufferStrategy, MockERC20, MockOracle} from "./mocks/Mocks.sol";
-
-/// @dev Fills the risky leg at the oracle mark. On a mainnet fork this is backed by the existing
-///      ETH/USDC pools; our own pool is empty at activation and cannot seed itself.
-contract MockSpotSwapper is ISpotSwapper {
-    MockOracle public immutable oracle;
-    MockERC20 public immutable quote;
-    MockERC20 public immutable risky;
-
-    constructor(MockOracle oracle_, MockERC20 quote_, MockERC20 risky_) {
-        oracle = oracle_;
-        quote = quote_;
-        risky = risky_;
-    }
-
-    function swapExactIn(address tokenIn, address, uint256 amountIn, uint256) external returns (uint256 amountOut) {
-        require(tokenIn == address(quote), "quote in only");
-        quote.transferFrom(msg.sender, address(this), amountIn);
-        amountOut = (amountIn * 1e18) / oracle.priceWad(address(risky));
-        risky.mint(msg.sender, amountOut);
-    }
-}
+import {MockAqua, MockBufferStrategy, MockERC20, MockOracle, MockSpotSwapper} from "./mocks/Mocks.sol";
 
 /// @notice The Day 2 gate: the vault activates into a real v4 pool, marks against it, and the hook
 ///         enforces the vault's policy on every swap.
@@ -139,7 +119,11 @@ contract V4IntegrationTest is Test {
         );
         hook.setVenue(address(venue));
         vm.prank(curator);
-        vault.setVenues(IPositionVenue(address(venue)), IBufferStrategy(address(strategy)));
+        vault.setVenues(
+            IPositionVenue(address(venue)),
+            IBufferStrategy(address(strategy)),
+            ISpotSwapper(address(swapper))
+        );
     }
 
     function _quotePerRisky() internal pure returns (uint256) {
@@ -158,6 +142,7 @@ contract V4IntegrationTest is Test {
             bufferShipShareWad: 0,
             bufferCallCoverageWad: 0.1e18,
             minRebalanceCoverageWad: 0.2e18,
+            liquidationSlippageWad: 0.01e18,
             risk: RiskPolicy.Params({
                 baseSpreadWad: 0.003e18, // 30 bps base
                 alphaWad: 2e18,

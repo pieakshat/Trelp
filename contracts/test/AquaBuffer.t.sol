@@ -19,7 +19,8 @@ import {IBufferStrategy} from "../src/interfaces/IBufferStrategy.sol";
 import {IPositionVenue} from "../src/interfaces/IPositionVenue.sol";
 import {IQuoteOracle} from "../src/interfaces/IQuoteOracle.sol";
 import {RiskPolicy} from "../src/libraries/RiskPolicy.sol";
-import {MockERC20, MockOracle, MockPositionVenue} from "./mocks/Mocks.sol";
+import {ISpotSwapper} from "../src/interfaces/ISpotSwapper.sol";
+import {MockERC20, MockOracle, MockPositionVenue, MockSpotSwapper} from "./mocks/Mocks.sol";
 
 /// @notice The Day 3 gate: the vault ships the junior buffer to the **official** Aqua registry and
 ///         SwapVM router, a taker fills against it with real onchain token transfers, and the call
@@ -46,6 +47,7 @@ contract AquaBufferTest is Test {
     TrancheVault vault;
     BufferStrategy strategy;
     SolvencyAdjuster adjuster;
+    MockSpotSwapper swapper;
 
     address curator = address(0xC0);
     address alice = address(0xA1);
@@ -79,8 +81,13 @@ contract AquaBufferTest is Test {
             address(router), address(quote), address(risky), 1e16, 1e20, address(adjuster), 30, 1
         );
 
+        swapper = new MockSpotSwapper(oracle, quote, risky);
         vm.prank(curator);
-        vault.setVenues(IPositionVenue(address(position)), IBufferStrategy(address(strategy)));
+        vault.setVenues(
+            IPositionVenue(address(position)),
+            IBufferStrategy(address(strategy)),
+            ISpotSwapper(address(swapper))
+        );
     }
 
     function _config() internal view returns (TrancheVault.Config memory) {
@@ -93,6 +100,7 @@ contract AquaBufferTest is Test {
             bufferShipShareWad: WAD, // ship the whole junior buffer
             bufferCallCoverageWad: 0.1e18,
             minRebalanceCoverageWad: 0.2e18,
+            liquidationSlippageWad: 0.01e18,
             risk: RiskPolicy.Params({
                 baseSpreadWad: 0.003e18,
                 alphaWad: 2e18,
