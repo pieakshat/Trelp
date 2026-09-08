@@ -8,6 +8,7 @@ import {IAquaRegistry} from "./interfaces/IAquaRegistry.sol";
 import {IBufferStrategy} from "./interfaces/IBufferStrategy.sol";
 import {IPositionVenue} from "./interfaces/IPositionVenue.sol";
 import {IQuoteOracle} from "./interfaces/IQuoteOracle.sol";
+import {ISpotSwapper} from "./interfaces/ISpotSwapper.sol";
 import {RiskPolicy} from "./libraries/RiskPolicy.sol";
 import {SolvencyLib} from "./libraries/SolvencyLib.sol";
 import {TrancheToken} from "./TrancheToken.sol";
@@ -43,6 +44,8 @@ contract TrancheVault {
     error CoverageAboveThreshold(int256 coverageWad, int256 thresholdWad);
     error NothingShipped();
     error GraceNotElapsed();
+    error NothingToLiquidate();
+    error LiquidationBelowFloor(uint256 received, uint256 floor);
     error NoValidSplit(uint256 juniorShareWad);
     error RebalanceTooSoon(uint64 nextAllowedAt);
     error RebalanceBlockedInDistress(int256 coverageWad, int256 floorWad);
@@ -58,6 +61,7 @@ contract TrancheVault {
     );
     event BufferCalled(address indexed caller, int256 coverageWad, uint256 shippedQuote);
     event Rebalanced(address indexed curator, uint256 cost, uint256 cumulativeCost);
+    event Liquidated(address indexed caller, uint256 riskySold, uint256 quoteReceived);
     event Donated(address indexed who, uint256 assets);
     event SettlementBegun(
         uint256 navBeforeUnwind,
@@ -87,6 +91,7 @@ contract TrancheVault {
     /// @param bufferShipShareWad   fraction of J shipped to the buffer rather than the pool
     /// @param bufferCallCoverageWad  b threshold below which `callBuffer()` is permissionless
     /// @param minRebalanceCoverageWad  b floor below which the range freezes
+    /// @param liquidationSlippageWad  most a settlement sale may give up against the oracle mark
     /// @param risk                 quoting policy, shared by every venue
     /// @param subscriptionEnd      earliest timestamp at which the epoch may be activated
     /// @param epochDuration        T, seconds
@@ -102,6 +107,7 @@ contract TrancheVault {
         uint256 bufferShipShareWad;
         int256 bufferCallCoverageWad;
         int256 minRebalanceCoverageWad;
+        uint256 liquidationSlippageWad;
         RiskPolicy.Params risk;
         uint64 subscriptionEnd;
         uint64 epochDuration;
@@ -124,6 +130,7 @@ contract TrancheVault {
     Config public config;
     IPositionVenue public positionVenue;
     IBufferStrategy public bufferStrategy;
+    ISpotSwapper public swapper;
 
     /// @dev Aqua records the maker as `msg.sender`, so the vault ships for itself. The capital
     ///      never leaves this contract, which is why `nav()` already counts it.
@@ -181,12 +188,15 @@ contract TrancheVault {
 
     /// @dev Wired after construction because venues need the vault address. One-time and
     ///      subscription-only, so depositors see the venues before activation.
-    function setVenues(IPositionVenue positionVenue_, IBufferStrategy bufferStrategy_) external {
+    function setVenues(IPositionVenue positionVenue_, IBufferStrategy bufferStrategy_, ISpotSwapper swapper_)
+        external
+    {
         if (msg.sender != curator) revert NotCurator();
         if (phase != Phase.Subscription) revert WrongPhase();
         if (address(positionVenue) != address(0)) revert VenuesAlreadySet();
         positionVenue = positionVenue_;
         bufferStrategy = bufferStrategy_;
+        swapper = swapper_;
     }
 
     function depositSenior(uint256 assets) external {
@@ -364,6 +374,41 @@ contract TrancheVault {
         unwindDeadline = uint64(block.timestamp) + config.unwindWindow;
         phase = Phase.Unwinding;
         emit SettlementBegun(navBefore, returned, unwindCost, unwindDeadline);
+    }
+
+    /// @notice Sell risky inventory back to the quote asset so the epoch can settle.
+    /// @dev Unwinding the LP position returns both currencies, and the buffer may have been filled
+    ///      into risky during the epoch, but `settle()` reads the quote balance alone. Without a
+    ///      way to convert, the vault would sit in `Unwinding` with no reachable exit and no way to
+    ///      redeem.
+    ///
+    ///      Permissionless, because settlement must not depend on the curator staying alive. The
+    ///      caller cannot grief the vault: the proceeds are floored against the oracle mark less
+    ///      `liquidationSlippageWad`, so a sale into a bad venue reverts rather than settling low.
+    ///
+    ///      Takes an amount so a large inventory can be worked down across several venues or
+    ///      blocks rather than demanding one deep fill.
+    function liquidate(uint256 amount) external returns (uint256 received) {
+        if (phase != Phase.Unwinding) revert WrongPhase();
+
+        uint256 held = risky.balanceOf(address(this));
+        if (amount == 0 || held == 0) revert NothingToLiquidate();
+        if (amount > held) amount = held;
+
+        uint256 floor;
+        {
+            uint256 mark = oracle.valueInQuote(address(risky), amount);
+            floor = mark - (mark * config.liquidationSlippageWad) / WAD;
+        }
+
+        risky.safeApprove(address(swapper), amount);
+        received = swapper.swapExactIn(address(risky), address(quote), amount, floor);
+        risky.safeApprove(address(swapper), 0);
+
+        // The swapper is external and enforces its own minimum; re-check what actually arrived.
+        if (received < floor) revert LiquidationBelowFloor(received, floor);
+
+        emit Liquidated(msg.sender, amount, received);
     }
 
     /// @notice Run the waterfall and open redemptions.

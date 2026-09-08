@@ -28,7 +28,7 @@ name = "via-ir"
 via_ir = true
 
 [[profile.default.compilation_restrictions]]
-paths = "{lib/swap-vm/**,lib/aqua/**,src/aqua/**,test/AquaBuffer.t.sol,test/smoke/**}"
+paths = "{lib/swap-vm/**,lib/aqua/**,src/aqua/**,src/TrancheVault.sol,test/AquaBuffer.t.sol,test/smoke/**}"
 via_ir = true
 
 [fmt]

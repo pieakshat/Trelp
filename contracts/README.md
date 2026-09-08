@@ -127,8 +127,10 @@ rebound. Junior demand is what killed BarnBridge and Saffron, and nothing here s
 **The oracle is a mock.** `TwapOracle` is unbuilt: coverage reads a live mark, so a single-block
 move could push the policy around. The breaker needs a TWAP and a persistence requirement.
 
-**Settlement liquidates at the mark.** The `Unwinding` phase exists and records `unwindCost`, but
-quoting the risky leg out over the window is not implemented — the demo sells it at the oracle price.
+**Settlement sells at the mark.** `liquidate()` converts leftover risky inventory through an
+external venue, floored against the oracle so a permissionless call cannot be pushed through at a
+bad price. Quoting the leg out over the unwind window at a widening discount — what `unwindDeadline`
+is reserved for — is still unimplemented.
 
 **Every epoch has two forced conversions**, not one: seeding the v4 position buys the risky leg
 externally, and settlement sells it back.

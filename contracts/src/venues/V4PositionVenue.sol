@@ -15,17 +15,8 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {RangeMath} from "../libraries/RangeMath.sol";
 
 import {IPositionVenue} from "../interfaces/IPositionVenue.sol";
+import {ISpotSwapper} from "../interfaces/ISpotSwapper.sol";
 import {IQuoteOracle} from "../interfaces/IQuoteOracle.sol";
-
-/// @notice Converts between the two pool currencies at or near spot.
-/// @dev Abstracted so the venue does not hard-code a router: on a mainnet fork this is backed by
-///      existing ETH/USDC liquidity, and by a mock in unit tests. The vault's pool is fresh and
-///      empty at activation, so it cannot be used to acquire its own seed.
-interface ISpotSwapper {
-    function swapExactIn(address tokenIn, address tokenOut, uint256 amountIn, uint256 minOut)
-        external
-        returns (uint256 amountOut);
-}
 
 interface ITrancheVaultClaim {
     function seniorClaim() external view returns (uint256);
