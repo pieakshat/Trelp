@@ -10,5 +10,26 @@
   },
   "../lib/v4-periphery": {
     "rev": "dce236d4e2057422d0791d9a973a58765eb46f65"
+  },
+  "lib/aqua": {
+    "rev": "9c5c42e5840e8741fba3597c48456c9510212b66"
+  },
+  "lib/forge-std": {
+    "rev": "bf647bd6046f2f7da30d0c2bf435e5c76a780c1b"
+  },
+  "lib/openzeppelin-contracts": {
+    "rev": "c64a1edb67b6e3f4a15cca8909c9482ad33a02b0"
+  },
+  "lib/solidity-utils": {
+    "rev": "5b597e43870850a37998ecb87d249ee499ae94f0"
+  },
+  "lib/solmate": {
+    "rev": "89365b880c4f3c786bdd453d4b8e8fe410344a69"
+  },
+  "lib/swap-vm": {
+    "rev": "f09a41e689240adc645934f965c8061749397cd2"
+  },
+  "lib/v4-core": {
+    "rev": "e50237c43811bd9b526eff40f26772152a42daba"
   }
 }

@@ -21,7 +21,8 @@ import {IPositionVenue} from "../src/interfaces/IPositionVenue.sol";
 import {IQuoteOracle} from "../src/interfaces/IQuoteOracle.sol";
 import {RiskPolicy} from "../src/libraries/RiskPolicy.sol";
 import {ISpotSwapper, V4PositionVenue} from "../src/venues/V4PositionVenue.sol";
-import {ITrancheVaultPolicy, TrancheHook} from "../src/venues/TrancheHook.sol";
+import {IVaultPolicy} from "../src/interfaces/IVaultPolicy.sol";
+import {TrancheHook} from "../src/venues/TrancheHook.sol";
 import {MockAqua, MockBufferStrategy, MockERC20, MockOracle} from "./mocks/Mocks.sol";
 
 /// @dev Fills the risky leg at the oracle mark. On a mainnet fork this is backed by the existing
@@ -109,10 +110,10 @@ contract V4IntegrationTest is Test {
         // The hook address must encode its permissions, so mine before deploying. The venue needs a
         // PoolKey naming the hook, so the venue address is set on the hook afterwards.
         uint160 flags = Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_SWAP_FLAG;
-        bytes memory args = abi.encode(manager, ITrancheVaultPolicy(address(vault)), false, address(this));
+        bytes memory args = abi.encode(manager, IVaultPolicy(address(vault)), false, address(this));
         (address hookAddr, bytes32 salt) =
             HookMiner.find(address(this), flags, type(TrancheHook).creationCode, args);
-        hook = new TrancheHook{salt: salt}(manager, ITrancheVaultPolicy(address(vault)), false, address(this));
+        hook = new TrancheHook{salt: salt}(manager, IVaultPolicy(address(vault)), false, address(this));
         assertEq(address(hook), hookAddr, "mined address");
 
         poolKey = PoolKey({

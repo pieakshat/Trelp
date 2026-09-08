@@ -10,6 +10,7 @@ import {ISwapVM} from "@1inch/swap-vm/src/interfaces/ISwapVM.sol";
 import {MakerTraitsLib} from "@1inch/swap-vm/src/libs/MakerTraits.sol";
 import {Salt} from "@1inch/swap-vm/src/instructions/Controls.sol";
 import {FeeFlatIn} from "@1inch/swap-vm/src/instructions/FeeFlat.sol";
+import {Extruction} from "@1inch/swap-vm/src/instructions/Extruction.sol";
 import {XYCConcentrateSwap} from "@1inch/swap-vm/src/instructions/XYCConcentrate.sol";
 
 import {IBufferStrategy} from "../interfaces/IBufferStrategy.sol";
@@ -36,9 +37,10 @@ import {IBufferStrategy} from "../interfaces/IBufferStrategy.sol";
 ///
 ///      So the vault ships quote alone and never needs a risky seed to open the buffer.
 ///
-///      DAY 4. `OraclePriceAdjuster` pins the quote to a Chainlink mark, and `Extruction` calls the
-///      vault's `riskQuote()` so the bid widens and shuts off as coverage thins. Both are stock
-///      instructions, so neither needs a modified SwapVM.
+///      COVERAGE AWARENESS. `Extruction` runs after the curve and hands the swap registers to
+///      `SolvencyAdjuster`, which widens the bid in proportion to the vault's distress and reverts
+///      once the policy stops bidding. It is a stock opcode, so the official deployed SwapVM is
+///      enough — no redeployment.
 contract BufferStrategy is IBufferStrategy {
     error TokensNotSorted();
 
@@ -57,6 +59,10 @@ contract BufferStrategy is IBufferStrategy {
     uint256 public immutable sqrtPriceMin;
     uint256 public immutable sqrtPriceMax;
 
+    /// @notice Extruction target that prices the bid off vault solvency. Zero disables it,
+    ///         which is what demo path 4 ("breaker off") flips.
+    address public immutable adjuster;
+
     /// @notice Maker fee on the way in, basis points.
     uint24 public immutable feeBps;
 
@@ -70,6 +76,7 @@ contract BufferStrategy is IBufferStrategy {
         address risky_,
         uint256 sqrtPriceMin_,
         uint256 sqrtPriceMax_,
+        address adjuster_,
         uint24 feeBps_,
         uint64 salt_
     ) {
@@ -78,6 +85,7 @@ contract BufferStrategy is IBufferStrategy {
         risky = risky_;
         (tokenA, tokenB) = quote_ < risky_ ? (quote_, risky_) : (risky_, quote_);
         if (tokenA >= tokenB) revert TokensNotSorted();
+        adjuster = adjuster_;
         sqrtPriceMin = sqrtPriceMin_;
         sqrtPriceMax = sqrtPriceMax_;
         feeBps = feeBps_;
@@ -93,6 +101,7 @@ contract BufferStrategy is IBufferStrategy {
         bytes memory program = bytes.concat(
             feeBps > 0 ? FeeFlatIn.build(feeBps) : bytes(""),
             XYCConcentrateSwap.build(sqrtPriceMin, sqrtPriceMax),
+            adjuster != address(0) ? Extruction.build(adjuster, "") : bytes(""),
             Salt.build(salt)
         );
 

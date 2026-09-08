@@ -12,6 +12,8 @@ import {MockTaker} from "@1inch/swap-vm/test/mocks/MockTaker.sol";
 
 import {TrancheVault} from "../src/TrancheVault.sol";
 import {BufferStrategy} from "../src/aqua/BufferStrategy.sol";
+import {SolvencyAdjuster} from "../src/aqua/SolvencyAdjuster.sol";
+import {IVaultPolicy} from "../src/interfaces/IVaultPolicy.sol";
 import {IAquaRegistry} from "../src/interfaces/IAquaRegistry.sol";
 import {IBufferStrategy} from "../src/interfaces/IBufferStrategy.sol";
 import {IPositionVenue} from "../src/interfaces/IPositionVenue.sol";
@@ -43,6 +45,7 @@ contract AquaBufferTest is Test {
     MockPositionVenue position;
     TrancheVault vault;
     BufferStrategy strategy;
+    SolvencyAdjuster adjuster;
 
     address curator = address(0xC0);
     address alice = address(0xA1);
@@ -71,7 +74,10 @@ contract AquaBufferTest is Test {
         position = new MockPositionVenue(quote, address(vault));
 
         // A wide band around spot: enough that the demo fills, tight enough to be a real curve.
-        strategy = new BufferStrategy(address(router), address(quote), address(risky), 1e16, 1e20, 30, 1);
+        adjuster = new SolvencyAdjuster(IVaultPolicy(address(vault)), address(risky));
+        strategy = new BufferStrategy(
+            address(router), address(quote), address(risky), 1e16, 1e20, address(adjuster), 30, 1
+        );
 
         vm.prank(curator);
         vault.setVenues(IPositionVenue(address(position)), IBufferStrategy(address(strategy)));
@@ -245,5 +251,56 @@ contract AquaBufferTest is Test {
         vm.warp(subEnd + T);
         vault.beginSettlement();
         assertFalse(vault.bufferShipped(), "docked at settlement");
+    }
+
+    // ---------------------------------------------------------------- the Extruction target
+
+    /// @dev Quotes through the VM's static path, so coverage is the only thing that changes
+    ///      between measurements. This is also the path that would break first if the adjuster
+    ///      were not `view`.
+    function _quoteSellRisky(ISwapVM.Order memory order, uint256 sell) internal view returns (uint256 out) {
+        (, out,) = ISwapVM(address(router)).quote(order, sell, _takerData(address(risky) < address(quote)));
+    }
+
+    /// @notice The buffer prices itself off the vault's solvency, from inside the VM.
+    function test_bufferWidensItsBidAsCoverageThins() public {
+        _activate();
+        ISwapVM.Order memory order = _order();
+        uint256 sell = 10e18;
+
+        uint256 healthy = _quoteSellRisky(order, sell);
+
+        position.setValue(500_000e18); // b falls to ~14%, distress ~0.67
+        uint256 stressed = _quoteSellRisky(order, sell);
+
+        assertGt(healthy, 0, "quotes at full coverage");
+        assertLt(stressed, healthy, "pays less for the same risky as the buffer thins");
+    }
+
+    /// @notice Once the policy stops bidding, the buffer refuses the risk-increasing side outright.
+    function test_bufferStopsBiddingWhenThePolicySaturates() public {
+        _activate();
+        ISwapVM.Order memory order = _order();
+
+        position.setValue(400_000e18); // NAV == senior claim, buffer exhausted
+        assertFalse(vault.riskQuote().bidAllowed, "policy has stopped bidding");
+
+        risky.mint(address(taker), 1e18);
+        vm.expectRevert(SolvencyAdjuster.BiddingHalted.selector);
+        taker.swap(order, 1e18, _takerData(address(risky) < address(quote)));
+    }
+
+    /// @notice Quote and swap must agree, which is why the adjuster is `view`. An extruction that
+    ///         wrote storage would make the staticcall path diverge from the executing one.
+    function test_quoteAndSwapAgree() public {
+        _activate();
+        ISwapVM.Order memory order = _order();
+        uint256 sell = 5e18;
+
+        uint256 quoted = _quoteSellRisky(order, sell);
+        risky.mint(address(taker), sell);
+        (, uint256 executed) = taker.swap(order, sell, _takerData(address(risky) < address(quote)));
+
+        assertEq(executed, quoted, "static and executing paths return the same amount");
     }
 }

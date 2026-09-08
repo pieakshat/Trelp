@@ -9,11 +9,8 @@ import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 
+import {IVaultPolicy} from "../interfaces/IVaultPolicy.sol";
 import {RiskPolicy} from "../libraries/RiskPolicy.sol";
-
-interface ITrancheVaultPolicy {
-    function riskQuote() external view returns (RiskPolicy.Quote memory);
-}
 
 /// @title TrancheHook
 /// @notice Enforces the vault's solvency policy at the pool boundary.
@@ -65,7 +62,7 @@ contract TrancheHook is IHooks {
     uint160 internal constant REQUIRED_FLAGS = Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_SWAP_FLAG;
 
     IPoolManager public immutable poolManager;
-    ITrancheVaultPolicy public immutable vault;
+    IVaultPolicy public immutable vault;
     address public immutable admin;
     bool public immutable riskyIsCurrency0;
 
@@ -78,7 +75,7 @@ contract TrancheHook is IHooks {
         _;
     }
 
-    constructor(IPoolManager poolManager_, ITrancheVaultPolicy vault_, bool riskyIsCurrency0_, address admin_) {
+    constructor(IPoolManager poolManager_, IVaultPolicy vault_, bool riskyIsCurrency0_, address admin_) {
         uint160 flags = uint160(address(this)) & Hooks.ALL_HOOK_MASK;
         if (flags != REQUIRED_FLAGS) revert InvalidHookAddress(flags, REQUIRED_FLAGS);
 
