@@ -20,7 +20,8 @@ library SolvencyLib {
     /// @param seniorPrincipal S0, senior capital raised during subscription
     /// @param juniorPrincipal J0, junior capital raised during subscription
     /// @param couponWad       c, senior coupon over the epoch
-    /// @param feeSplitWad     s, senior's share of realised fee income (the §3.2 split clause)
+    /// @param feeSplitWad     s, senior's share of net epoch P&L. DERIVED from `j` at activation
+    ///                        via `splitFromJuniorShare`, never configured directly.
     /// @param start           t0, the moment capital was deployed
     /// @param duration        T, epoch length in seconds
     struct Terms {
@@ -61,18 +62,43 @@ library SolvencyLib {
         return t.seniorPrincipal + accrued;
     }
 
-    /// @notice The senior claim that settles: S0 + min(S0 * c, s * F).
-    /// @dev This is the §3.3 hybrid. The `min` is the split clause: in a quiet epoch the pool
-    ///      cannot pay the coupon, and junior is not asked to fund it out of principal.
+    /// @notice The split `s` that keeps junior ahead of simply LPing the pool, at ANY fee yield.
+    /// @dev Requiring junior's return to beat the unlevered pool return and taking the worst case
+    ///      over all fee yields makes the fee term drop out entirely, leaving
     ///
-    ///      NOTE ON THE `max_rate` CAP IN THE PLAN: a cap above the fixed rate can never bind,
-    ///      because min(S0*c, s*F) <= S0*c by construction. The fixed rate IS the cap on senior
-    ///      upside. `maxCouponWad` is therefore enforced by TrancheVault as a bound on the
-    ///      curator's choice of `c`, not as a third term in this payout.
-    /// @param feesAccrued F, realised fee income over the epoch, in quote base units
-    function finalSeniorClaim(Terms memory t, uint256 feesAccrued) internal pure returns (uint256) {
+    ///          s  <=  (1 - 2j) / (1 - j)
+    ///
+    ///      `lambdaWad` is the fraction of that envelope senior is actually given, and is the only
+    ///      curator input. Returns 0 at j >= 50%, where no split can make junior worth doing --
+    ///      so the 50% wall is arithmetic here rather than a hardcoded guard elsewhere.
+    function splitFromJuniorShare(uint256 jWad, uint256 lambdaWad)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (jWad >= WAD / 2) return 0;
+        return (lambdaWad * (WAD - 2 * jWad)) / (WAD - jWad);
+    }
+
+    /// @notice The senior claim that settles: S0 + min(S0 * c, s * max(0, NAV - V0)).
+    /// @dev Anchored on NET epoch P&L, not gross fee income. Earning spread while being adversely
+    ///      selected is not income, and a gross-fee split would overpay senior in exactly the
+    ///      epochs where junior is absorbing the loss. It also means the vault needs no fee oracle
+    ///      from the venue: NAV is sufficient.
+    ///
+    ///      The `min` is the split clause. In a losing epoch the gain is zero and senior receives
+    ///      no coupon at all -- only principal priority, which is the correct behaviour.
+    ///
+    ///      NOTE ON THE `max_rate` CAP IN THE ORIGINAL PLAN: a cap above the fixed rate can never
+    ///      bind, because min(S0*c, s*gain) <= S0*c by construction. The fixed rate IS the cap on
+    ///      senior upside. `maxCouponWad` is enforced by TrancheVault as a bound on the curator's
+    ///      choice of `c`, not as a third term here.
+    /// @param nav Net asset value at settlement, in quote base units
+    function finalSeniorClaim(Terms memory t, uint256 nav) internal pure returns (uint256) {
+        uint256 v0 = totalPrincipal(t);
+        uint256 gain = nav > v0 ? nav - v0 : 0;
         uint256 fixedCoupon = (t.seniorPrincipal * t.couponWad) / WAD;
-        uint256 splitCoupon = (feesAccrued * t.feeSplitWad) / WAD;
+        uint256 splitCoupon = (gain * t.feeSplitWad) / WAD;
         return t.seniorPrincipal + (fixedCoupon < splitCoupon ? fixedCoupon : splitCoupon);
     }
 

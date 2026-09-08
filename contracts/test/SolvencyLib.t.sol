@@ -55,19 +55,19 @@ contract SolvencyLibTest is Test {
     function test_workedExample_flatPrice_juniorEarns37Point7Percent() public pure {
         SolvencyLib.Terms memory t = _terms();
         uint256 fees = (V0 * 12) / 100; // f = 12%
+        uint256 navAtSettlement = V0 + fees; // flat price, k = 1
 
-        uint256 claim = SolvencyLib.finalSeniorClaim(t, fees);
+        uint256 claim = SolvencyLib.finalSeniorClaim(t, navAtSettlement);
         assertEq(claim, S0 + (S0 * COUPON) / WAD, "fixed coupon binds, not the split");
 
-        uint256 nav = V0 + fees; // flat price, k = 1
-        (uint256 seniorPayout, uint256 juniorPayout) = SolvencyLib.waterfall(nav, claim);
+        (uint256 seniorPayout, uint256 juniorPayout) = SolvencyLib.waterfall(navAtSettlement, claim);
 
         assertEq(seniorPayout, claim, "senior whole");
         // Junior return = juniorPayout / J0 - 1, expected +37.67%
         uint256 juniorReturnWad = (juniorPayout * WAD) / J0 - WAD;
         assertApproxEqRel(juniorReturnWad, 0.3766666e18, 1e12, "junior +37.7%");
         // and the unlevered LP would have made only f = 12%.
-        assertApproxEqRel((nav * WAD) / V0 - WAD, 0.12e18, 1e12, "unlevered LP +12%");
+        assertApproxEqRel((navAtSettlement * WAD) / V0 - WAD, 0.12e18, 1e12, "unlevered LP +12%");
     }
 
     /// @notice The plan's quiet month: the split clause caps the coupon the pool cannot pay, so
@@ -76,7 +76,7 @@ contract SolvencyLibTest is Test {
         SolvencyLib.Terms memory t = _terms();
         uint256 fees = (V0 * 1) / 100; // f = 1%
 
-        uint256 claim = SolvencyLib.finalSeniorClaim(t, fees);
+        uint256 claim = SolvencyLib.finalSeniorClaim(t, V0 + fees);
         uint256 splitCoupon = (fees * SPLIT) / WAD;
         assertEq(claim, S0 + splitCoupon, "split binds");
         assertLt(claim - S0, (S0 * COUPON) / WAD, "senior earns less than the fixed rate");
@@ -85,7 +85,7 @@ contract SolvencyLibTest is Test {
     /// @notice Senior is capped at its claim; junior takes the entire residual, including recovery.
     function test_waterfall_juniorTakesResidualAndFirstLoss() public pure {
         SolvencyLib.Terms memory t = _terms();
-        uint256 claim = SolvencyLib.finalSeniorClaim(t, (V0 * 12) / 100);
+        uint256 claim = SolvencyLib.finalSeniorClaim(t, V0 + (V0 * 12) / 100);
 
         // Blowout: everything above the senior claim belongs to junior.
         (uint256 sUp, uint256 jUp) = SolvencyLib.waterfall(2 * V0, claim);
@@ -112,11 +112,47 @@ contract SolvencyLibTest is Test {
     }
 
     /// @notice Whatever the fee path, senior never receives more than the fixed coupon.
-    function testFuzz_seniorCouponNeverExceedsFixedRate(uint256 fees) public pure {
-        fees = bound(fees, 0, 1e30);
+    function testFuzz_seniorCouponNeverExceedsFixedRate(uint256 navAtSettlement) public pure {
+        navAtSettlement = bound(navAtSettlement, 0, 1e30);
         SolvencyLib.Terms memory t = _terms();
-        uint256 coupon = SolvencyLib.finalSeniorClaim(t, fees) - S0;
+        uint256 coupon = SolvencyLib.finalSeniorClaim(t, navAtSettlement) - S0;
         assertLe(coupon, (S0 * COUPON) / WAD);
+    }
+
+    /// @notice A losing epoch pays senior no coupon at all -- only principal priority. This is the
+    ///         behaviour a gross-fee split would get wrong, by paying out of junior's principal.
+    function test_losingEpochPaysNoCoupon() public pure {
+        SolvencyLib.Terms memory t = _terms();
+        assertEq(SolvencyLib.finalSeniorClaim(t, V0 - 1), S0, "no coupon when NAV is below V0");
+        assertEq(SolvencyLib.finalSeniorClaim(t, V0), S0, "no coupon at break-even");
+        assertEq(SolvencyLib.finalSeniorClaim(t, V0 / 2), S0);
+    }
+
+    /// @notice The split envelope, which is what keeps junior ahead of plain LPing at any fee yield.
+    function test_splitEnvelopeMatchesTermSheet() public pure {
+        // Full envelope, lambda = 1: s_max = (1 - 2j) / (1 - j)
+        assertApproxEqAbs(SolvencyLib.splitFromJuniorShare(0.2e18, WAD), 0.75e18, 2, "j=20% -> 75%");
+        assertApproxEqAbs(SolvencyLib.splitFromJuniorShare(0.3e18, WAD), 0.571428571428571428e18, 2, "j=30%");
+        assertApproxEqAbs(SolvencyLib.splitFromJuniorShare(0.4e18, WAD), 0.333333333333333333e18, 2, "j=40%");
+
+        // The configured demo point: j = 30%, lambda = 0.7 -> s = 40%.
+        assertApproxEqAbs(SolvencyLib.splitFromJuniorShare(0.3e18, 0.7e18), 0.4e18, 2, "term sheet");
+    }
+
+    /// @notice The 50% wall, as arithmetic rather than a hardcoded guard.
+    function test_noValidSplitAtOrAboveHalfJunior() public pure {
+        assertEq(SolvencyLib.splitFromJuniorShare(0.5e18, WAD), 0, "j=50% leaves nothing for senior");
+        assertEq(SolvencyLib.splitFromJuniorShare(0.6e18, WAD), 0);
+        assertGt(SolvencyLib.splitFromJuniorShare(0.4999e18, WAD), 0, "just under the wall still works");
+    }
+
+    /// @notice The envelope is monotonically decreasing in junior depth: a thicker junior tranche
+    ///         has less leverage, so less of the P&L can be handed to senior.
+    function testFuzz_splitEnvelopeShrinksAsJuniorThickens(uint256 j1, uint256 j2) public pure {
+        j1 = bound(j1, 0.01e18, 0.49e18);
+        j2 = bound(j2, 0.01e18, 0.49e18);
+        if (j1 > j2) (j1, j2) = (j2, j1);
+        assertGe(SolvencyLib.splitFromJuniorShare(j1, WAD), SolvencyLib.splitFromJuniorShare(j2, WAD));
     }
 
     /// @notice The waterfall is conservative and total: it never pays out more than NAV.
