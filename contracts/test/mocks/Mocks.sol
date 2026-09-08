@@ -3,7 +3,8 @@ pragma solidity ^0.8.26;
 
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 
-import {IBufferVenue} from "../../src/interfaces/IBufferVenue.sol";
+import {IAquaRegistry} from "../../src/interfaces/IAquaRegistry.sol";
+import {IBufferStrategy} from "../../src/interfaces/IBufferStrategy.sol";
 import {IPositionVenue} from "../../src/interfaces/IPositionVenue.sol";
 import {IQuoteOracle} from "../../src/interfaces/IQuoteOracle.sol";
 
@@ -81,27 +82,62 @@ contract MockPositionVenue is IPositionVenue {
     }
 }
 
-/// @dev Stands in for the Aqua leg. Deliberately moves NO tokens on `ship`, matching Aqua's
-///      virtual-balance model: the capital stays in the vault's own wallet.
-contract MockBufferVenue is IBufferVenue {
-    uint256 internal _shipped;
-    bool internal _isShipped;
+/// @dev Stands in for Aqua in unit tests. Deliberately moves NO tokens on `ship`, matching the
+///      real registry's virtual-balance model: capital stays in the maker's wallet.
+contract MockAqua is IAquaRegistry {
+    mapping(bytes32 => bool) public active;
+    mapping(bytes32 => mapping(address => uint256)) public balances;
 
-    function ship(uint256 quoteAmount) external {
-        _shipped = quoteAmount;
-        _isShipped = true;
+    function ship(address, bytes calldata strategy, address[] calldata tokens, uint256[] calldata amounts)
+        external
+        returns (bytes32 strategyHash)
+    {
+        strategyHash = keccak256(strategy);
+        require(!active[strategyHash], "StrategiesMustBeImmutable");
+        active[strategyHash] = true;
+        for (uint256 i; i < tokens.length; ++i) balances[strategyHash][tokens[i]] = amounts[i];
     }
 
-    function dock() external {
-        _shipped = 0;
-        _isShipped = false;
+    function dock(address, bytes32 strategyHash, address[] calldata tokens) external {
+        require(active[strategyHash], "not active");
+        active[strategyHash] = false;
+        for (uint256 i; i < tokens.length; ++i) balances[strategyHash][tokens[i]] = 0;
     }
 
-    function shippedQuote() external view returns (uint256) {
-        return _shipped;
+    function rawBalances(address, address, bytes32 strategyHash, address token)
+        external
+        view
+        returns (uint248, uint8)
+    {
+        return (uint248(balances[strategyHash][token]), active[strategyHash] ? 2 : 0);
+    }
+}
+
+/// @dev Returns a well-formed but inert strategy. The real one builds SwapVM bytecode and lives
+///      under `src/aqua/` with the Degensoft licence.
+contract MockBufferStrategy is IBufferStrategy {
+    address public immutable app;
+    address public immutable quote;
+    address public immutable risky;
+    uint256 public nonce;
+
+    constructor(address app_, address quote_, address risky_) {
+        app = app_;
+        quote = quote_;
+        risky = risky_;
     }
 
-    function isShipped() external view returns (bool) {
-        return _isShipped;
+    function shipParams(uint256 quoteAmount)
+        external
+        view
+        returns (address, bytes memory strategy, address[] memory tokens, uint256[] memory amounts)
+    {
+        tokens = new address[](2);
+        tokens[0] = quote;
+        tokens[1] = risky;
+        amounts = new uint256[](2);
+        amounts[0] = quoteAmount;
+        strategy = abi.encode(app, quote, risky, quoteAmount);
+        return (app, strategy, tokens, amounts);
     }
 }

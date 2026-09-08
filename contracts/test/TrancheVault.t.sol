@@ -4,11 +4,13 @@ pragma solidity ^0.8.26;
 import {Test} from "forge-std/Test.sol";
 
 import {TrancheVault} from "../src/TrancheVault.sol";
-import {IBufferVenue} from "../src/interfaces/IBufferVenue.sol";
+import {IAquaRegistry} from "../src/interfaces/IAquaRegistry.sol";
+import {IBufferStrategy} from "../src/interfaces/IBufferStrategy.sol";
 import {IPositionVenue} from "../src/interfaces/IPositionVenue.sol";
+import {IQuoteOracle} from "../src/interfaces/IQuoteOracle.sol";
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 import {RiskPolicy} from "../src/libraries/RiskPolicy.sol";
-import {MockBufferVenue, MockERC20, MockOracle, MockPositionVenue} from "./mocks/Mocks.sol";
+import {MockAqua, MockBufferStrategy, MockERC20, MockOracle, MockPositionVenue} from "./mocks/Mocks.sol";
 
 contract TrancheVaultTest is Test {
     uint256 constant WAD = 1e18;
@@ -22,7 +24,8 @@ contract TrancheVaultTest is Test {
     MockOracle oracle;
     TrancheVault vault;
     MockPositionVenue position;
-    MockBufferVenue buffer;
+    MockAqua aqua;
+    MockBufferStrategy strategy;
 
     address curator = address(0xC0);
     address alice = address(0xA1); // senior
@@ -67,11 +70,12 @@ contract TrancheVaultTest is Test {
             rebalanceCooldown: 6 hours
         });
 
-        vault = new TrancheVault(quote, risky, oracle, curator, cfg);
+        aqua = new MockAqua();
+        vault = new TrancheVault(quote, risky, IQuoteOracle(address(oracle)), IAquaRegistry(address(aqua)), curator, cfg);
         position = new MockPositionVenue(quote, address(vault));
-        buffer = new MockBufferVenue();
+        strategy = new MockBufferStrategy(address(0xA99A), address(quote), address(risky));
         vm.prank(curator);
-        vault.setVenues(IPositionVenue(address(position)), IBufferVenue(address(buffer)));
+        vault.setVenues(IPositionVenue(address(position)), IBufferStrategy(address(strategy)));
     }
 
     function _subscribe() internal {
@@ -159,7 +163,7 @@ contract TrancheVaultTest is Test {
         _deploy(WAD); // ship 100% of junior
         _activate();
 
-        assertEq(buffer.shippedQuote(), J0, "buffer shipped");
+        assertEq(vault.shippedQuote(), J0, "buffer shipped");
         assertEq(quote.balanceOf(address(vault)), J0, "capital never left the vault");
         assertEq(position.valueInQuote(), S0, "only senior capital went into the pool");
         assertEq(vault.nav(), V0, "NAV counts the buffer once, not twice");
@@ -180,7 +184,7 @@ contract TrancheVaultTest is Test {
 
         vm.prank(alice);
         vault.callBuffer();
-        assertFalse(buffer.isShipped(), "buffer docked");
+        assertFalse(vault.bufferShipped(), "buffer docked");
         assertEq(vault.nav(), 750_000e6, "docking moves no capital, so NAV is unchanged");
     }
 
@@ -189,7 +193,7 @@ contract TrancheVaultTest is Test {
         _activate();
         vm.prank(curator);
         vault.callBuffer();
-        assertFalse(buffer.isShipped());
+        assertFalse(vault.bufferShipped());
     }
 
     /// @notice Filling against the buffer leaves the vault holding the risky asset, and that
@@ -403,7 +407,7 @@ contract TrancheVaultTest is Test {
         cfg.couponWad = 0.02e18;
         cfg.maxCouponWad = 0.015e18;
         vm.expectRevert(TrancheVault.CouponAboveMax.selector);
-        new TrancheVault(quote, risky, oracle, curator, cfg);
+        new TrancheVault(quote, risky, IQuoteOracle(address(oracle)), IAquaRegistry(address(aqua)), curator, cfg);
     }
 
     function test_donationLiftsCoverageWithoutMintingClaims() public {

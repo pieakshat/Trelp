@@ -4,7 +4,8 @@ pragma solidity ^0.8.26;
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/src/utils/SafeTransferLib.sol";
 
-import {IBufferVenue} from "./interfaces/IBufferVenue.sol";
+import {IAquaRegistry} from "./interfaces/IAquaRegistry.sol";
+import {IBufferStrategy} from "./interfaces/IBufferStrategy.sol";
 import {IPositionVenue} from "./interfaces/IPositionVenue.sol";
 import {IQuoteOracle} from "./interfaces/IQuoteOracle.sol";
 import {RiskPolicy} from "./libraries/RiskPolicy.sol";
@@ -115,6 +116,7 @@ contract TrancheVault {
 
     ERC20 public immutable quote;
     ERC20 public immutable risky;
+    IAquaRegistry public immutable aqua;
     IQuoteOracle public immutable oracle;
     TrancheToken public immutable senior;
     TrancheToken public immutable junior;
@@ -122,7 +124,16 @@ contract TrancheVault {
 
     Config public config;
     IPositionVenue public positionVenue;
-    IBufferVenue public bufferVenue;
+    IBufferStrategy public bufferStrategy;
+
+    /// @dev Aqua records the maker as `msg.sender`, so the vault ships for itself. That is the
+    ///      point rather than an inconvenience: the capital never leaves this contract, which is
+    ///      why `nav()` already counts it and must not add a venue balance on top.
+    bytes32 public bufferStrategyHash;
+    address public bufferApp;
+    address[] internal bufferTokens;
+    uint256 public shippedQuote;
+    bool public bufferShipped;
 
     Phase public phase;
     SolvencyLib.Terms public terms;
@@ -148,12 +159,20 @@ contract TrancheVault {
     uint256 public seniorSupplyAtSettlement;
     uint256 public juniorSupplyAtSettlement;
 
-    constructor(ERC20 quote_, ERC20 risky_, IQuoteOracle oracle_, address curator_, Config memory config_) {
+    constructor(
+        ERC20 quote_,
+        ERC20 risky_,
+        IQuoteOracle oracle_,
+        IAquaRegistry aqua_,
+        address curator_,
+        Config memory config_
+    ) {
         if (config_.couponWad > config_.maxCouponWad) revert CouponAboveMax();
 
         quote = quote_;
         risky = risky_;
         oracle = oracle_;
+        aqua = aqua_;
         curator = curator_;
         config = config_;
 
@@ -164,12 +183,12 @@ contract TrancheVault {
 
     /// @dev Venues are wired after construction because they need the vault address. One-time and
     ///      subscription-only, so depositors can see the venues before the epoch activates.
-    function setVenues(IPositionVenue positionVenue_, IBufferVenue bufferVenue_) external {
+    function setVenues(IPositionVenue positionVenue_, IBufferStrategy bufferStrategy_) external {
         if (msg.sender != curator) revert NotCurator();
         if (phase != Phase.Subscription) revert WrongPhase();
         if (address(positionVenue) != address(0)) revert VenuesAlreadySet();
         positionVenue = positionVenue_;
-        bufferVenue = bufferVenue_;
+        bufferStrategy = bufferStrategy_;
     }
 
     function depositSenior(uint256 assets) external {
@@ -224,7 +243,7 @@ contract TrancheVault {
         // Ship first: Aqua takes no custody, so this only writes an allowance. The tokens stay here
         // and back the buffer's quotes from this contract's own balance.
         uint256 shipped = (j0 * config.bufferShipShareWad) / WAD;
-        if (shipped != 0) bufferVenue.ship(shipped);
+        if (shipped != 0) _ship(shipped);
 
         uint256 toDeploy = quote.balanceOf(address(this)) - shipped;
         quote.safeTransfer(address(positionVenue), toDeploy);
@@ -251,7 +270,7 @@ contract TrancheVault {
     /// @notice NAV(t), in quote base units.
     /// @dev Buffer capital shipped to Aqua is deliberately absent as a separate term. Aqua holds
     ///      nothing, so that capital is already inside this contract's own token balances. Adding
-    ///      `bufferVenue.shippedQuote()` here would double-count it.
+    ///      `shippedQuote` here would double-count it.
     function nav() public view returns (uint256 total) {
         total = quote.balanceOf(address(this));
 
@@ -282,16 +301,45 @@ contract TrancheVault {
     ///      N blocks, so a single-block manipulation cannot force the call (plan §11).
     function callBuffer() external {
         if (phase != Phase.Active) revert WrongPhase();
-        if (!bufferVenue.isShipped()) revert NothingShipped();
+        if (!bufferShipped) revert NothingShipped();
 
         int256 b = coverageWad();
         if (msg.sender != curator && b >= config.bufferCallCoverageWad) {
             revert CoverageAboveThreshold(b, config.bufferCallCoverageWad);
         }
 
-        uint256 shipped = bufferVenue.shippedQuote();
-        bufferVenue.dock();
+        uint256 shipped = shippedQuote;
+        _dock();
         emit BufferCalled(msg.sender, b, shipped);
+    }
+
+    /// @dev Ship the buffer as virtual balances. No tokens move: Aqua records an allowance against
+    ///      this contract's wallet and pulls only at fill time.
+    function _ship(uint256 quoteAmount) internal {
+        (address app, bytes memory strategy, address[] memory tokens, uint256[] memory amounts) =
+            bufferStrategy.shipParams(quoteAmount);
+
+        // Approve exactly what is shipped. The virtual balance caps each strategy, but a bounded
+        // allowance keeps the blast radius of any future app the vault ships to bounded too.
+        quote.safeApprove(address(aqua), quoteAmount);
+
+        bufferApp = app;
+        delete bufferTokens;
+        for (uint256 i; i < tokens.length; ++i) bufferTokens.push(tokens[i]);
+
+        bufferStrategyHash = aqua.ship(app, strategy, tokens, amounts);
+        shippedQuote = quoteAmount;
+        bufferShipped = true;
+    }
+
+    /// @dev Revoke the strategy. A permission change, not a withdrawal, so it cannot fail for
+    ///      liquidity reasons. Aqua requires every token in the strategy to be closed at once,
+    ///      which is why a partial call would need a second shipped strategy.
+    function _dock() internal {
+        aqua.dock(bufferApp, bufferStrategyHash, bufferTokens);
+        bufferShipped = false;
+        shippedQuote = 0;
+        quote.safeApprove(address(aqua), 0);
     }
 
     /// @notice Add quote to the vault without minting any claim.
@@ -313,7 +361,7 @@ contract TrancheVault {
 
         uint256 navBefore = nav();
 
-        if (bufferVenue.isShipped()) bufferVenue.dock();
+        if (bufferShipped) _dock();
         uint256 returned = positionVenue.unwind();
 
         uint256 navAfter = nav();

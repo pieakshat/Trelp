@@ -15,13 +15,14 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {HookMiner} from "./utils/HookMiner.sol";
 
 import {TrancheVault} from "../src/TrancheVault.sol";
-import {IBufferVenue} from "../src/interfaces/IBufferVenue.sol";
+import {IAquaRegistry} from "../src/interfaces/IAquaRegistry.sol";
+import {IBufferStrategy} from "../src/interfaces/IBufferStrategy.sol";
 import {IPositionVenue} from "../src/interfaces/IPositionVenue.sol";
 import {IQuoteOracle} from "../src/interfaces/IQuoteOracle.sol";
 import {RiskPolicy} from "../src/libraries/RiskPolicy.sol";
 import {ISpotSwapper, V4PositionVenue} from "../src/venues/V4PositionVenue.sol";
 import {ITrancheVaultPolicy, TrancheHook} from "../src/venues/TrancheHook.sol";
-import {MockBufferVenue, MockERC20, MockOracle} from "./mocks/Mocks.sol";
+import {MockAqua, MockBufferStrategy, MockERC20, MockOracle} from "./mocks/Mocks.sol";
 
 /// @dev Fills the risky leg at the oracle mark. On a mainnet fork this is backed by the existing
 ///      ETH/USDC pools; our own pool is empty at activation and cannot seed itself.
@@ -69,7 +70,8 @@ contract V4IntegrationTest is Test {
     MockERC20 risky;
     MockOracle oracle;
     MockSpotSwapper swapper;
-    MockBufferVenue buffer;
+    MockAqua aqua;
+    MockBufferStrategy strategy;
 
     TrancheVault vault;
     V4PositionVenue venue;
@@ -98,9 +100,11 @@ contract V4IntegrationTest is Test {
         oracle = new MockOracle();
         oracle.setPrice(address(risky), _quotePerRisky());
         swapper = new MockSpotSwapper(oracle, quote, risky);
-        buffer = new MockBufferVenue();
-
-        vault = new TrancheVault(quote, risky, IQuoteOracle(address(oracle)), curator, _config());
+        aqua = new MockAqua();
+        strategy = new MockBufferStrategy(address(0xA99A), address(quote), address(risky));
+        vault = new TrancheVault(
+            quote, risky, IQuoteOracle(address(oracle)), IAquaRegistry(address(aqua)), curator, _config()
+        );
 
         // The hook address must encode its permissions, so mine before deploying. The venue needs a
         // PoolKey naming the hook, so the venue address is set on the hook afterwards.
@@ -134,7 +138,7 @@ contract V4IntegrationTest is Test {
         );
         hook.setVenue(address(venue));
         vm.prank(curator);
-        vault.setVenues(IPositionVenue(address(venue)), IBufferVenue(address(buffer)));
+        vault.setVenues(IPositionVenue(address(venue)), IBufferStrategy(address(strategy)));
     }
 
     function _quotePerRisky() internal pure returns (uint256) {
