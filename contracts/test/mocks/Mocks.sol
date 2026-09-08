@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC20} from "solmate/src/tokens/ERC20.sol";
 
 import {IBufferVenue} from "../../src/interfaces/IBufferVenue.sol";
 import {IPositionVenue} from "../../src/interfaces/IPositionVenue.sol";

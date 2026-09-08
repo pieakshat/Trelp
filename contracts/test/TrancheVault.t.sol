@@ -6,7 +6,7 @@ import {Test} from "forge-std/Test.sol";
 import {TrancheVault} from "../src/TrancheVault.sol";
 import {IBufferVenue} from "../src/interfaces/IBufferVenue.sol";
 import {IPositionVenue} from "../src/interfaces/IPositionVenue.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC20} from "solmate/src/tokens/ERC20.sol";
 import {RiskPolicy} from "../src/libraries/RiskPolicy.sol";
 import {MockBufferVenue, MockERC20, MockOracle, MockPositionVenue} from "./mocks/Mocks.sol";
 

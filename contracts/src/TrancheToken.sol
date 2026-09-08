@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC20} from "solmate/src/tokens/ERC20.sol";
 
 /// @notice A transferable claim on one tranche of a vault epoch.
 /// @dev Claims are ERC-20 because secondary trading is the only exit during the active phase
