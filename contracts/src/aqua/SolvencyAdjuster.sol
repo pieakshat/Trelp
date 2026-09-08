@@ -9,16 +9,23 @@ pragma solidity 0.8.30;
 import {IStaticExtruction} from "@1inch/swap-vm/src/instructions/Extruction.sol";
 import {SwapQuery, SwapRegisters} from "@1inch/swap-vm/src/libs/VM.sol";
 
+import {IQuoteOracle} from "../interfaces/IQuoteOracle.sol";
 import {IVaultPolicy} from "../interfaces/IVaultPolicy.sol";
 import {RiskPolicy} from "../libraries/RiskPolicy.sol";
 
 /// @title SolvencyAdjuster
-/// @notice Makes the junior buffer price itself off the vault's coverage, from inside the VM.
+/// @notice Anchors the junior buffer's bid to an oracle mark and prices it off vault solvency.
 ///
-/// @dev This is the coverage-aware half of the breaker on the Aqua leg. Placed after the curve
-///      instruction, it takes the amounts the curve produced and moves them in the maker's favour
-///      in proportion to distress — so the buffer's bid widens as the buffer thins, and stops
-///      entirely once the policy says so.
+/// @dev Two jobs, and the first one is load bearing.
+///
+///      **Oracle anchoring.** A bare concentrated curve prices off its range alone, with no
+///      relation to the market. Fills then land at arbitrary prices, and a policy that refuses
+///      them is refusing trades of unknown sign — it can just as easily destroy value as protect
+///      it. So the bid is bounded: never pay more than the oracle mark less the policy spread. The
+///      curve still applies, and whichever side is tighter wins.
+///
+///      **Coverage awareness.** The spread in that bound comes from the vault's distress signal,
+///      so the bid widens as the buffer thins and refuses outright once the policy stops bidding.
 ///
 ///      NO MODIFIED SwapVM. `Extruction` is a stock opcode that delegates the swap registers to a
 ///      maker-chosen contract, so this runs against the official deployed VM. Promoting the same
@@ -40,12 +47,14 @@ contract SolvencyAdjuster is IStaticExtruction {
     uint256 internal constant WAD = 1e18;
 
     IVaultPolicy public immutable vault;
+    IQuoteOracle public immutable oracle;
 
     /// @notice The asset the vault takes on inventory in. Receiving it is the risk-increasing side.
     address public immutable risky;
 
-    constructor(IVaultPolicy vault_, address risky_) {
+    constructor(IVaultPolicy vault_, IQuoteOracle oracle_, address risky_) {
         vault = vault_;
+        oracle = oracle_;
         risky = risky_;
     }
 
@@ -63,12 +72,27 @@ contract SolvencyAdjuster is IStaticExtruction {
 
         // `tokenIn` is what the maker receives, so the vault is acquiring the risky asset exactly
         // when the taker is paying it in. That is the side the policy gates.
-        if (query.tokenIn == risky && !q.bidAllowed) revert BiddingHalted();
+        bool acquiringRisky = query.tokenIn == risky;
+        if (acquiringRisky && !q.bidAllowed) revert BiddingHalted();
 
-        // Widen in the maker's favour: pay out less, or charge more in.
         if (query.isExactIn) {
-            updated.amountOut = swap.amountOut - (swap.amountOut * q.spreadWad) / WAD;
+            uint256 bounded = swap.amountOut - (swap.amountOut * q.spreadWad) / WAD;
+
+            if (acquiringRisky) {
+                // Cap what we pay at the oracle mark less the spread. Without this the curve's
+                // price is unmoored from the market and the coverage policy has nothing coherent
+                // to protect: refusing a mispriced fill is as likely to forgo a gain as avoid a
+                // loss. Whichever of curve and oracle is tighter wins.
+                uint256 mark = oracle.valueInQuote(risky, swap.amountIn);
+                uint256 ceiling = mark - (mark * q.spreadWad) / WAD;
+                if (ceiling < bounded) bounded = ceiling;
+            }
+
+            updated.amountOut = bounded;
         } else {
+            // Exact-out carries the spread but not the oracle bound: `IQuoteOracle` values a token
+            // amount and cannot invert, so there is no mark to bound against here. The buffer's
+            // own flow is exact-in; this branch exists so the program is total.
             updated.amountIn = swap.amountIn + (swap.amountIn * q.spreadWad) / WAD;
         }
 

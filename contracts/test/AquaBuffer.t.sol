@@ -74,7 +74,7 @@ contract AquaBufferTest is Test {
         position = new MockPositionVenue(quote, address(vault));
 
         // A wide band around spot: enough that the demo fills, tight enough to be a real curve.
-        adjuster = new SolvencyAdjuster(IVaultPolicy(address(vault)), address(risky));
+        adjuster = new SolvencyAdjuster(IVaultPolicy(address(vault)), IQuoteOracle(address(oracle)), address(risky));
         strategy = new BufferStrategy(
             address(router), address(quote), address(risky), 1e16, 1e20, address(adjuster), 30, 1
         );
