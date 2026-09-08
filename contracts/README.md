@@ -124,8 +124,9 @@ scripted swaps. Say this before a judge does.
 **Junior is short a knockout.** Calling the buffer crystallises junior's loss and forecloses the
 rebound. Junior demand is what killed BarnBridge and Saffron, and nothing here solves it.
 
-**The oracle is a mock.** `TwapOracle` is unbuilt: coverage reads a live mark, so a single-block
-move could push the policy around. The breaker needs a TWAP and a persistence requirement.
+**The breaker still fires on a single reading.** `UniswapV3TwapOracle` removes the single-block
+attack on the *mark*, but `callBuffer()` acts the first time coverage crosses its threshold. It
+should require the breach to persist several blocks.
 
 **Settlement sells at the mark.** `liquidate()` converts leftover risky inventory through an
 external venue, floored against the oracle so a permissionless call cannot be pushed through at a

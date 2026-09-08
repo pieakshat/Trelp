@@ -8,6 +8,7 @@ import {IBufferStrategy} from "../../src/interfaces/IBufferStrategy.sol";
 import {IPositionVenue} from "../../src/interfaces/IPositionVenue.sol";
 import {IQuoteOracle} from "../../src/interfaces/IQuoteOracle.sol";
 import {ISpotSwapper} from "../../src/interfaces/ISpotSwapper.sol";
+import {IUniswapV3PoolObserver} from "../../src/oracles/UniswapV3TwapOracle.sol";
 
 contract MockERC20 is ERC20 {
     constructor(string memory n, string memory s, uint8 d) ERC20(n, s, d) {}
@@ -180,5 +181,48 @@ contract MockSpotSwapper is ISpotSwapper {
             quote.mint(msg.sender, amountOut);
         }
         require(amountOut >= minOut, "MockSpotSwapper: minOut");
+    }
+}
+
+/// @dev A v3 pool that reports whatever cumulative history the test sets. `setMeanTick` synthesises
+///      a history whose average over `window` is exactly that tick; `setCumulatives` sets the raw
+///      pair so rounding and uneven windows can be exercised directly.
+contract MockV3Pool is IUniswapV3PoolObserver {
+    address public token0;
+    address public token1;
+
+    int56 internal older;
+    int56 internal newer;
+    bool internal stale;
+
+    constructor(address token0_, address token1_) {
+        (token0, token1) = token0_ < token1_ ? (token0_, token1_) : (token1_, token0_);
+    }
+
+    function setMeanTick(int24 tick, uint32 window) external {
+        older = 0;
+        newer = int56(tick) * int56(uint56(window));
+    }
+
+    function setCumulatives(int56 older_, int56 newer_) external {
+        older = older_;
+        newer = newer_;
+    }
+
+    /// @dev Mimics the pool refusing a window it has no observations for.
+    function setStale(bool stale_) external {
+        stale = stale_;
+    }
+
+    function observe(uint32[] calldata)
+        external
+        view
+        returns (int56[] memory tickCumulatives, uint160[] memory secondsPerLiquidityCumulativeX128s)
+    {
+        require(!stale, "OLD");
+        tickCumulatives = new int56[](2);
+        tickCumulatives[0] = older;
+        tickCumulatives[1] = newer;
+        secondsPerLiquidityCumulativeX128s = new uint160[](2);
     }
 }
