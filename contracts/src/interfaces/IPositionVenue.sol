@@ -11,9 +11,11 @@ interface IPositionVenue {
     /// @notice Current mark-to-market value of the position, in quote base units.
     function valueInQuote() external view returns (uint256);
 
-    /// @notice Cumulative fee income earned over the epoch, in quote base units.
-    /// @dev MUST survive `unwind()`, since the settlement split clause reads it afterwards.
-    function feesInQuote() external view returns (uint256);
+    /// @notice Move the position to a new range. The venue MUST reject any range whose value at
+    ///         its own lower bound no longer covers the senior claim with margin -- only the venue
+    ///         knows the range, so the floor-value covenant is enforced here. The vault enforces
+    ///         the policy half: coverage floor, cooldown, and recording what the move cost.
+    function rebalance(bytes calldata venueData) external;
 
     /// @notice Burn the position, convert to quote, and return it to the vault.
     /// @return quoteReturned Quote base units actually delivered to the vault.

@@ -38,7 +38,8 @@ contract MockPositionVenue is IPositionVenue {
     MockERC20 public immutable quote;
     address public immutable vault;
     uint256 internal _value;
-    uint256 internal _fees;
+    uint256 internal _rebalanceLoss;
+    uint256 public rebalanceCalls;
 
     constructor(MockERC20 quote_, address vault_) {
         quote = quote_;
@@ -56,16 +57,21 @@ contract MockPositionVenue is IPositionVenue {
         _value = v;
     }
 
-    function setFees(uint256 f) external {
-        _fees = f;
+    function setRebalanceLoss(uint256 loss) external {
+        _rebalanceLoss = loss;
+    }
+
+    /// @dev A real venue enforces the floor-value covenant here; the mock only models the cost.
+    function rebalance(bytes calldata) external {
+        rebalanceCalls += 1;
+        if (_rebalanceLoss != 0) {
+            quote.burn(address(this), _rebalanceLoss);
+            _value -= _rebalanceLoss;
+        }
     }
 
     function valueInQuote() external view returns (uint256) {
         return _value;
-    }
-
-    function feesInQuote() external view returns (uint256) {
-        return _fees;
     }
 
     function unwind() external returns (uint256 quoteReturned) {

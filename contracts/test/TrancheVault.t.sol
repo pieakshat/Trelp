@@ -7,6 +7,7 @@ import {TrancheVault} from "../src/TrancheVault.sol";
 import {IBufferVenue} from "../src/interfaces/IBufferVenue.sol";
 import {IPositionVenue} from "../src/interfaces/IPositionVenue.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {RiskPolicy} from "../src/libraries/RiskPolicy.sol";
 import {MockBufferVenue, MockERC20, MockOracle, MockPositionVenue} from "./mocks/Mocks.sol";
 
 contract TrancheVaultTest is Test {
@@ -44,15 +45,26 @@ contract TrancheVaultTest is Test {
     function _deploy(uint256 bufferShipShareWad) internal {
         TrancheVault.Config memory cfg = TrancheVault.Config({
             couponWad: 0.01e18,
-            feeSplitWad: 0.4e18,
+            lambdaWad: 0.7e18,
             maxCouponWad: 0.015e18,
             minJuniorShareWad: 0.05e18,
             maxJuniorShareWad: 0.6e18,
             bufferShipShareWad: bufferShipShareWad,
             bufferCallCoverageWad: 0.1e18,
+            minRebalanceCoverageWad: 0.2e18,
+            risk: RiskPolicy.Params({
+                baseSpreadWad: 0.0005e18,
+                alphaWad: 2e18,
+                kappaWad: 0.5e18,
+                targetCoverageWad: 0.4285e18,
+                bidCutoffWad: 0.9e18,
+                maxInventoryWad: 0.3e18
+            }),
             subscriptionEnd: subEnd,
             epochDuration: T,
-            activationGrace: 1 days
+            activationGrace: 1 days,
+            unwindWindow: 1 days,
+            rebalanceCooldown: 6 hours
         });
 
         vault = new TrancheVault(quote, risky, oracle, curator, cfg);
@@ -92,7 +104,6 @@ contract TrancheVaultTest is Test {
 
         uint256 fees = (V0 * 12) / 100; // f = 12%, flat price
         position.setValue(V0 + fees);
-        position.setFees(fees);
 
         vm.warp(subEnd + T);
         vault.beginSettlement();
@@ -114,7 +125,6 @@ contract TrancheVaultTest is Test {
     function test_crash_seniorImpairedJuniorWiped() public {
         _activate();
         position.setValue(V0 / 2); // -50% NAV
-        position.setFees(0);
 
         vm.warp(subEnd + T);
         vault.beginSettlement();
@@ -194,6 +204,118 @@ contract TrancheVaultTest is Test {
         risky.mint(address(vault), 50e18); // 50 * 2000 = 100k USDC
 
         assertEq(vault.nav(), V0, "inventory marked at the oracle price");
+    }
+
+    // ------------------------------------------------------------ derived terms
+
+    /// @notice Senior's terms are priced off realised demand, not configured ahead of it.
+    function test_splitIsDerivedFromRealisedJuniorShare() public {
+        _activate();
+        (,,, uint256 feeSplitWad,,) = vault.terms();
+        // j = 30%, lambda = 0.7  ->  s = 0.7 * (1 - 0.6) / (1 - 0.3) = 40%
+        assertApproxEqAbs(feeSplitWad, 0.4e18, 2, "split derived at activation");
+    }
+
+    /// @notice At j >= 50% no split leaves junior better off than simply LPing, so no valid terms
+    ///         exist and the epoch cannot activate. The wall is arithmetic, not a hardcoded guard.
+    function test_activationRejectedWhenNoValidSplitExists() public {
+        quote.mint(alice, 400_000e6);
+        quote.mint(bob, 600_000e6);
+        vm.startPrank(alice);
+        quote.approve(address(vault), 400_000e6);
+        vault.depositSenior(400_000e6);
+        vm.stopPrank();
+        vm.startPrank(bob);
+        quote.approve(address(vault), 600_000e6);
+        vault.depositJunior(600_000e6);
+        vm.stopPrank();
+
+        vm.warp(subEnd);
+        vm.expectRevert(abi.encodeWithSelector(TrancheVault.NoValidSplit.selector, 0.6e18));
+        vault.activate();
+    }
+
+    /// @notice A losing epoch pays senior principal priority and no coupon.
+    function test_losingEpochPaysSeniorNoCoupon() public {
+        _activate();
+        position.setValue((V0 * 90) / 100); // -10%
+
+        vm.warp(subEnd + T);
+        vault.beginSettlement();
+        vault.settle();
+
+        assertEq(vault.seniorClaimAtSettlement(), S0, "principal only");
+        assertEq(vault.seniorPot(), S0, "senior whole but unpaid");
+        assertEq(vault.juniorPot(), (V0 * 90) / 100 - S0, "junior absorbs the whole loss");
+    }
+
+    // ------------------------------------------------------------ range authority
+
+    function test_rebalanceRecordsWhatItCost() public {
+        _activate();
+        position.setRebalanceLoss(1_000e6);
+
+        vm.prank(curator);
+        vault.rebalance("");
+
+        assertEq(position.rebalanceCalls(), 1);
+        assertEq(vault.rebalanceCost(), 1_000e6, "cost measured, not hidden");
+        assertEq(vault.rebalanceCount(), 1);
+    }
+
+    /// @notice The range freezes in distress. Exactly when a curator is most tempted to re-centre
+    ///         is when re-centring does the most damage.
+    function test_rebalanceBlockedInDistress() public {
+        _activate();
+        position.setValue(800_000e6); // b = (800k - 700k) / 700k = 14.3%, below the 20% floor
+
+        assertLt(vault.coverageWad(), int256(0.2e18));
+        vm.expectRevert();
+        vm.prank(curator);
+        vault.rebalance("");
+    }
+
+    function test_rebalanceRespectsCooldown() public {
+        _activate();
+        vm.prank(curator);
+        vault.rebalance("");
+
+        vm.expectRevert();
+        vm.prank(curator);
+        vault.rebalance("");
+
+        vm.warp(block.timestamp + 6 hours);
+        vm.prank(curator);
+        vault.rebalance("");
+        assertEq(vault.rebalanceCount(), 2);
+    }
+
+    function test_onlyCuratorMayRebalance() public {
+        _activate();
+        vm.expectRevert(TrancheVault.NotCurator.selector);
+        vm.prank(alice);
+        vault.rebalance("");
+    }
+
+    // ------------------------------------------------------------ quoting policy
+
+    function test_inventoryCeilingIsSizedAgainstPrincipal() public {
+        _activate();
+        // maxInventoryWad = 30% of V0
+        assertEq(vault.maxRiskyValue(), (V0 * 30) / 100);
+    }
+
+    function test_riskQuoteWidensAndStopsBiddingAsCoverageFalls() public {
+        _activate();
+        assertTrue(vault.riskQuote().bidAllowed, "healthy vault bids");
+        uint256 healthySpread = vault.riskQuote().spreadWad;
+
+        position.setValue(750_000e6); // coverage down to ~7%
+        assertGt(vault.riskQuote().spreadWad, healthySpread, "spread widens as the buffer thins");
+
+        position.setValue(690_000e6); // senior already under water
+        assertFalse(vault.riskQuote().bidAllowed, "stops acquiring the risky asset");
+        assertTrue(vault.riskQuote().askAllowed, "still sells");
     }
 
     // ------------------------------------------------------------ guards

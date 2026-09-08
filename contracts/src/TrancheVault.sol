@@ -7,6 +7,7 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {IBufferVenue} from "./interfaces/IBufferVenue.sol";
 import {IPositionVenue} from "./interfaces/IPositionVenue.sol";
 import {IQuoteOracle} from "./interfaces/IQuoteOracle.sol";
+import {RiskPolicy} from "./libraries/RiskPolicy.sol";
 import {SolvencyLib} from "./libraries/SolvencyLib.sol";
 import {TrancheToken} from "./TrancheToken.sol";
 
@@ -18,10 +19,10 @@ import {TrancheToken} from "./TrancheToken.sol";
 ///      new deployment. This removes a whole class of cross-epoch accounting bugs and costs nothing
 ///      the demo needs. Auto-roll (plan §4) is a router on top, not vault state.
 ///
-///      PHASES (plan §4). Subscription -> Active -> Settling -> Settled. There is deliberately no
+///      PHASES. Subscription -> Active -> Unwinding -> Settled. There is deliberately no
 ///      entry or exit during Active: the senior coupon is only quotable against a known `j`, and
 ///      redemption at NAV mid-drawdown would let junior exit before absorbing the loss it exists to
-///      absorb. `Settling` is split out from `Settled` because the forced unwind is a real,
+///      absorb. `Unwinding` is split out from `Settled` because the forced unwind is a real,
 ///      scheduled market order whose cost is recorded in `unwindCost` rather than hidden.
 contract TrancheVault {
     using SafeTransferLib for ERC20;
@@ -42,13 +43,28 @@ contract TrancheVault {
     error CoverageAboveThreshold(int256 coverageWad, int256 thresholdWad);
     error NothingShipped();
     error GraceNotElapsed();
+    error NoValidSplit(uint256 juniorShareWad);
+    error RebalanceTooSoon(uint64 nextAllowedAt);
+    error RebalanceBlockedInDistress(int256 coverageWad, int256 floorWad);
 
 
     event Deposited(address indexed who, bool indexed isSenior, uint256 assets);
-    event Activated(uint256 seniorPrincipal, uint256 juniorPrincipal, uint256 juniorShareWad, uint256 shipped);
+    event Activated(
+        uint256 seniorPrincipal,
+        uint256 juniorPrincipal,
+        uint256 juniorShareWad,
+        uint256 feeSplitWad,
+        uint256 shipped
+    );
     event BufferCalled(address indexed caller, int256 coverageWad, uint256 shippedQuote);
+    event Rebalanced(address indexed curator, uint256 cost, uint256 cumulativeCost);
     event Donated(address indexed who, uint256 assets);
-    event SettlementBegun(uint256 navBeforeUnwind, uint256 quoteReturned, uint256 unwindCost, uint256 fees);
+    event SettlementBegun(
+        uint256 navBeforeUnwind,
+        uint256 quoteReturned,
+        uint256 unwindCost,
+        uint64 unwindDeadline
+    );
     event Settled(uint256 nav, uint256 seniorClaim, uint256 seniorPot, uint256 juniorPot);
     event Cancelled(uint256 seniorPrincipal, uint256 juniorPrincipal);
     event Redeemed(address indexed who, bool indexed isSenior, uint256 shares, uint256 assets);
@@ -57,32 +73,41 @@ contract TrancheVault {
     enum Phase {
         Subscription,
         Active,
-        Settling,
+        Unwinding,
         Settled
     }
 
     /// @param couponWad            c, senior coupon over the whole epoch
-    /// @param feeSplitWad          s, senior's share of realised fees (the split clause)
+    /// @param lambdaWad            fraction of the safe split envelope senior is given. The only
+    ///                             curator input to pricing; `s` is derived from realised `j`.
     /// @param maxCouponWad         governance bound on `c`. See the note in SolvencyLib on why the
     ///                             plan's `max_rate` cannot be a third term in the payout.
     /// @param minJuniorShareWad    reject epochs with too thin a buffer to be worth structuring
     /// @param maxJuniorShareWad    reject epochs that are really just a junior-only LP vault
     /// @param bufferShipShareWad   fraction of J shipped to the buffer venue (the §8 frontier knob)
     /// @param bufferCallCoverageWad  b threshold below which `callBuffer()` is permissionless
+    /// @param minRebalanceCoverageWad  b floor below which the range freezes
+    /// @param risk                 quoting policy, shared by every venue
     /// @param subscriptionEnd      earliest timestamp at which the epoch may be activated
     /// @param epochDuration        T, seconds
     /// @param activationGrace      how long after `subscriptionEnd` before depositors may cancel
+    /// @param unwindWindow         how long the vault quotes its way out before settling
+    /// @param rebalanceCooldown    minimum spacing between range moves
     struct Config {
         uint256 couponWad;
-        uint256 feeSplitWad;
+        uint256 lambdaWad;
         uint256 maxCouponWad;
         uint256 minJuniorShareWad;
         uint256 maxJuniorShareWad;
         uint256 bufferShipShareWad;
         int256 bufferCallCoverageWad;
+        int256 minRebalanceCoverageWad;
+        RiskPolicy.Params risk;
         uint64 subscriptionEnd;
         uint64 epochDuration;
         uint64 activationGrace;
+        uint64 unwindWindow;
+        uint64 rebalanceCooldown;
     }
 
 
@@ -106,7 +131,16 @@ contract TrancheVault {
     /// @dev Every epoch ends in a scheduled, publicly known unwind. Recording it keeps that cost in
     ///      the returns rather than outside them.
     uint256 public unwindCost;
-    uint256 public feesAtSettlement;
+    /// @notice Cumulative quote value lost to curator range moves.
+    /// @dev Range authority is discretion that lands on senior, so it is measured. Junior can read
+    ///      what curator activity cost them instead of inferring it from the final number.
+    uint256 public rebalanceCost;
+    uint32 public rebalanceCount;
+    uint64 public lastRebalanceAt;
+
+    /// @notice When the unwind window closes. Set at `beginSettlement`.
+    uint64 public unwindDeadline;
+
     uint256 public navAtSettlement;
     uint256 public seniorClaimAtSettlement;
     uint256 public seniorPot;
@@ -169,17 +203,23 @@ contract TrancheVault {
         // A one-sided epoch is not a tranche structure; refuse rather than mis-quote it.
         if (s0 == 0 || j0 == 0) revert DegenerateEpoch();
 
+        uint256 j = (j0 * WAD) / (s0 + j0);
+        if (j < config.minJuniorShareWad || j > config.maxJuniorShareWad) revert JuniorShareOutOfBounds(j);
+
+        // Senior's terms are priced off realised demand, not configured ahead of it. At j >= 50%
+        // no split leaves junior better off than simply LPing, so no valid terms exist and the
+        // epoch cannot activate.
+        uint256 split = SolvencyLib.splitFromJuniorShare(j, config.lambdaWad);
+        if (split == 0) revert NoValidSplit(j);
+
         terms = SolvencyLib.Terms({
             seniorPrincipal: s0,
             juniorPrincipal: j0,
             couponWad: config.couponWad,
-            feeSplitWad: config.feeSplitWad,
+            feeSplitWad: split,
             start: uint64(block.timestamp),
             duration: config.epochDuration
         });
-
-        uint256 j = SolvencyLib.juniorShareWad(terms);
-        if (j < config.minJuniorShareWad || j > config.maxJuniorShareWad) revert JuniorShareOutOfBounds(j);
 
         // Ship first: Aqua takes no custody, so this only writes an allowance. The tokens stay here
         // and back the buffer's quotes from this contract's own balance.
@@ -191,7 +231,7 @@ contract TrancheVault {
         positionVenue.deploy(toDeploy);
 
         phase = Phase.Active;
-        emit Activated(s0, j0, j, shipped);
+        emit Activated(s0, j0, j, split, shipped);
     }
 
     /// @notice Refund path if the epoch is never activated. Deposits were 1:1 and capital never
@@ -272,7 +312,6 @@ contract TrancheVault {
         if (block.timestamp < uint256(terms.start) + terms.duration) revert EpochNotOver();
 
         uint256 navBefore = nav();
-        feesAtSettlement = positionVenue.feesInQuote();
 
         if (bufferVenue.isShipped()) bufferVenue.dock();
         uint256 returned = positionVenue.unwind();
@@ -280,21 +319,24 @@ contract TrancheVault {
         uint256 navAfter = nav();
         unwindCost = navBefore > navAfter ? navBefore - navAfter : 0;
 
-        phase = Phase.Settling;
-        emit SettlementBegun(navBefore, returned, unwindCost, feesAtSettlement);
+        unwindDeadline = uint64(block.timestamp) + config.unwindWindow;
+        phase = Phase.Unwinding;
+        emit SettlementBegun(navBefore, returned, unwindCost, unwindDeadline);
     }
 
     /// @notice Run the waterfall and open redemptions.
-    /// @dev Requires the risky leg to be flat. Converting residual inventory is the keeper's job
-    ///      (breaker stage 3) and is deliberately not done here: a market sell inside settlement
-    ///      would be an unpriced, unbounded action in the middle of the accounting step.
+    /// @dev Requires the risky leg to be flat. The vault quotes its way out over `unwindWindow`
+    ///      rather than market-selling: every epoch ends in a scheduled, publicly known conversion,
+    ///      and an auction at a widening discount is a better exit than a market order at a time
+    ///      everyone can predict. A market sell inside settlement would also be an unpriced,
+    ///      unbounded action in the middle of the accounting step.
     function settle() external {
-        if (phase != Phase.Settling) revert WrongPhase();
+        if (phase != Phase.Unwinding) revert WrongPhase();
         uint256 riskyBalance = risky.balanceOf(address(this));
         if (riskyBalance != 0) revert RiskyInventoryOutstanding(riskyBalance);
 
         navAtSettlement = quote.balanceOf(address(this));
-        seniorClaimAtSettlement = SolvencyLib.finalSeniorClaim(terms, feesAtSettlement);
+        seniorClaimAtSettlement = SolvencyLib.finalSeniorClaim(terms, navAtSettlement);
         (seniorPot, juniorPot) = SolvencyLib.waterfall(navAtSettlement, seniorClaimAtSettlement);
 
         seniorSupplyAtSettlement = senior.totalSupply();
@@ -324,6 +366,70 @@ contract TrancheVault {
         if (assets != 0) quote.safeTransfer(msg.sender, assets);
         emit Redeemed(msg.sender, isSenior, shares, assets);
     }
+
+    // ---------------------------------------------------------------- range authority
+
+    /// @notice Move the LP position to a new range.
+    /// @dev Naive rebalancing is strictly worse for senior than a static range: re-centring
+    ///      downward after a fall sells the accumulated asset at the bottom and re-arms the same
+    ///      exposure from a lower base, and in a trend that compounds until senior's protection is
+    ///      gone with no single event to point at.
+    ///
+    ///      So this is discretion inside a covenant box, the way a managed securitisation works:
+    ///        - the vault enforces policy: a coverage floor and a cooldown, and it measures cost;
+    ///        - the venue enforces the range covenant: the position's value at its own lower bound
+    ///          must still cover the senior claim with margin.
+    ///
+    ///      The coverage floor matters most. Exactly when a curator is most tempted to fix things
+    ///      is when re-centring does the most damage, so the range freezes in distress.
+    function rebalance(bytes calldata venueData) external {
+        if (msg.sender != curator) revert NotCurator();
+        if (phase != Phase.Active) revert WrongPhase();
+
+        uint64 nextAllowed = lastRebalanceAt + config.rebalanceCooldown;
+        if (lastRebalanceAt != 0 && block.timestamp < nextAllowed) revert RebalanceTooSoon(nextAllowed);
+
+        int256 b = coverageWad();
+        if (b < config.minRebalanceCoverageWad) {
+            revert RebalanceBlockedInDistress(b, config.minRebalanceCoverageWad);
+        }
+
+        uint256 navBefore = nav();
+        positionVenue.rebalance(venueData);
+        uint256 navAfter = nav();
+
+        uint256 cost = navBefore > navAfter ? navBefore - navAfter : 0;
+        rebalanceCost += cost;
+        rebalanceCount += 1;
+        lastRebalanceAt = uint64(block.timestamp);
+
+        emit Rebalanced(msg.sender, cost, rebalanceCost);
+    }
+
+    // ---------------------------------------------------------------- quoting policy
+
+    /// @notice Quote-denominated value of the risky inventory this vault is holding.
+    function riskyValue() public view returns (uint256) {
+        uint256 bal = risky.balanceOf(address(this));
+        return bal == 0 ? 0 : oracle.valueInQuote(address(risky), bal);
+    }
+
+    /// @notice The hard ceiling on convertible capital.
+    /// @dev An oracle deviation band caps what an adversary extracts per fill, not per epoch, so a
+    ///      band alone does not bound total loss -- an underwater junior can simply loop it. This
+    ///      ceiling is the structural control, sized against principal so that inventory conversion
+    ///      cannot cost more than junior's buffer absorbs.
+    function maxRiskyValue() public view returns (uint256) {
+        return (SolvencyLib.totalPrincipal(terms) * config.risk.maxInventoryWad) / WAD;
+    }
+
+    /// @notice The current quoting instruction. Read by the v4 hook and by the Aqua buffer's
+    ///         Extruction target, so both venues price off one policy.
+    function riskQuote() external view returns (RiskPolicy.Quote memory) {
+        return RiskPolicy.evaluate(config.risk, coverageWad(), riskyValue(), SolvencyLib.totalPrincipal(terms));
+    }
+
+    // ---------------------------------------------------------------- views
 
     function juniorShareWad() external view returns (uint256) {
         return SolvencyLib.juniorShareWad(terms);
