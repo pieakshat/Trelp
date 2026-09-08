@@ -92,3 +92,49 @@ repo's MIT header, and the root README needs the attribution line before submiss
   the accounting step.
 - TWAP oracle and breach persistence. `callBuffer()` reads a live signal today, which a single-block
   manipulation could move.
+
+## Demo
+
+```bash
+forge test --root contracts --match-path "test/DemoPaths.t.sol" -vv
+```
+
+Five paths, one vault, one set of parameters (j=30%, c=1%/epoch cap, λ=0.7 → s=40%).
+
+| path | senior | junior |
+|---|---|---|
+| 1 — flat price, f = 12% | **+1.00%** | **+37.67%** |
+| 3 — −60% crash, policy **on** | **−1.24%** | −100% |
+| 4 — same crash, policy **off** | **−15.44%** | −100% |
+
+An unlevered LP would have made +12% in path 1. Path 2 shows the spread widening 0.30% → 0.62% as
+coverage falls 42.9% → 20.3%. Paths 5a–5c price the buffer-placement frontier: with the buffer fully
+in the pool senior loses 9.65%, at 50% out 1.77%.
+
+Paths 3 and 4 differ by **one constructor argument** — whether the buffer's program carries the
+`Extruction` target. That pairing is the pitch.
+
+## Known holes
+
+**The demo drives its own flow.** A fresh v4 pool with a novel hook is in no router's default set,
+and `docs/PROGRAMS.md` confirms 1inch production routing uses only a predefined, security-reviewed
+subset of SwapVM programs. Neither venue gets organic volume, so every fee number here comes from
+scripted swaps. Say this before a judge does.
+
+**Junior is short a knockout.** Calling the buffer crystallises junior's loss and forecloses the
+rebound. Junior demand is what killed BarnBridge and Saffron, and nothing here solves it.
+
+**The oracle is a mock.** `TwapOracle` is unbuilt: coverage reads a live mark, so a single-block
+move could push the policy around. The breaker needs a TWAP and a persistence requirement.
+
+**Settlement liquidates at the mark.** The `Unwinding` phase exists and records `unwindCost`, but
+quoting the risky leg out over the window is not implemented — the demo sells it at the oracle price.
+
+**Every epoch has two forced conversions**, not one: seeding the v4 position buys the risky leg
+externally, and settlement sells it back.
+
+## Unexplained
+
+Running three full epochs in a single test function panics with an arithmetic overflow that no
+trace attributes to any call. Each epoch passes in isolation, so the frontier is three tests rather
+than a loop. Worked around, not root-caused.
