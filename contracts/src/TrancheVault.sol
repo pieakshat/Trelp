@@ -46,6 +46,7 @@ contract TrancheVault {
     error GraceNotElapsed();
     error NothingToLiquidate();
     error LiquidationBelowFloor(uint256 received, uint256 floor);
+    error AssetsNotDistinct();
     error NoValidSplit(uint256 juniorShareWad);
     error RebalanceTooSoon(uint64 nextAllowedAt);
     error RebalanceBlockedInDistress(int256 coverageWad, int256 floorWad);
@@ -173,6 +174,7 @@ contract TrancheVault {
         Config memory config_
     ) {
         if (config_.couponWad > config_.maxCouponWad) revert CouponAboveMax();
+        if (address(quote_) == address(risky_)) revert AssetsNotDistinct();
 
         quote = quote_;
         risky = risky_;

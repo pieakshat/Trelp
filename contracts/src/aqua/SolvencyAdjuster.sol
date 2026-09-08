@@ -39,12 +39,14 @@ contract SolvencyAdjuster is IStaticExtruction {
     IQuoteOracle public immutable oracle;
 
     /// @notice The asset the vault takes on inventory in. Receiving it is the risk-increasing side.
+    /// @dev Read from the vault rather than passed in, so the gate cannot end up applying to the
+    ///      wrong side of the trade.
     address public immutable risky;
 
-    constructor(IVaultPolicy vault_, IQuoteOracle oracle_, address risky_) {
+    constructor(IVaultPolicy vault_, IQuoteOracle oracle_) {
         vault = vault_;
         oracle = oracle_;
-        risky = risky_;
+        risky = vault_.risky();
     }
 
     /// @inheritdoc IStaticExtruction

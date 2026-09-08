@@ -466,6 +466,15 @@ contract TrancheVaultTest is Test {
         vault.cancel();
     }
 
+    function test_vaultRejectsIdenticalAssets() public {
+        TrancheVault.Config memory cfg;
+        cfg.maxCouponWad = 0.015e18;
+        vm.expectRevert(TrancheVault.AssetsNotDistinct.selector);
+        new TrancheVault(
+            quote, quote, IQuoteOracle(address(oracle)), IAquaRegistry(address(aqua)), curator, cfg
+        );
+    }
+
     function test_couponAboveMaxRejectedAtDeploy() public {
         TrancheVault.Config memory cfg;
         cfg.couponWad = 0.02e18;

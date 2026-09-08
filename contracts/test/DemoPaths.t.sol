@@ -119,7 +119,7 @@ contract DemoPathsTest is Test {
             quote, risky, IQuoteOracle(address(oracle)), IAquaRegistry(address(aqua)), curator, cfg
         );
         position = new MockPositionVenue(quote, address(vault));
-        adjuster = new SolvencyAdjuster(IVaultPolicy(address(vault)), IQuoteOracle(address(oracle)), address(risky));
+        adjuster = new SolvencyAdjuster(IVaultPolicy(address(vault)), IQuoteOracle(address(oracle)));
 
         // Path 4 is this one line: the same vault with no coverage-aware pricing on the buffer.
         strategy = new BufferStrategy(

@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
@@ -43,6 +44,8 @@ contract TrancheHook is IHooks {
     error InvalidHookAddress(uint160 actual, uint160 expected);
     error NotAdmin();
     error VenueAlreadySet();
+    error PoolAssetsMismatch();
+    error WrongHook();
 
     event FeeOverridden(uint24 feePips, bool bidAllowed);
 
@@ -58,32 +61,46 @@ contract TrancheHook is IHooks {
     IPoolManager public immutable poolManager;
     IVaultPolicy public immutable vault;
     address public immutable admin;
-    bool public immutable riskyIsCurrency0;
 
     /// @dev Not immutable: the venue needs a PoolKey naming this hook, so the hook exists first.
     ///      Settable once; the mined address commits to everything else.
     address public venue;
+
+    /// @dev Derived from the pool key at wiring time, never supplied. It decides which swap
+    ///      direction the halt applies to, so a wrong value would refuse the de-risking side and
+    ///      permit the risk-increasing one — silently, and exactly backwards.
+    bool public riskyIsCurrency0;
 
     modifier onlyPoolManager() {
         if (msg.sender != address(poolManager)) revert NotPoolManager();
         _;
     }
 
-    constructor(IPoolManager poolManager_, IVaultPolicy vault_, bool riskyIsCurrency0_, address admin_) {
+    constructor(IPoolManager poolManager_, IVaultPolicy vault_, address admin_) {
         uint160 flags = uint160(address(this)) & Hooks.ALL_HOOK_MASK;
         if (flags != REQUIRED_FLAGS) revert InvalidHookAddress(flags, REQUIRED_FLAGS);
 
         poolManager = poolManager_;
         vault = vault_;
-        riskyIsCurrency0 = riskyIsCurrency0_;
         admin = admin_;
     }
 
-    /// @notice Name the venue permitted to provide liquidity. One-time.
-    function setVenue(address venue_) external {
+    /// @notice Name the venue permitted to provide liquidity, and learn the pool's asset ordering.
+    /// @dev One-time. The ordering is read off the key and checked against the vault's own assets,
+    ///      so the directional halt cannot be inverted by a bad deployment argument.
+    function setVenue(address venue_, PoolKey calldata key) external {
         if (msg.sender != admin) revert NotAdmin();
         if (venue != address(0)) revert VenueAlreadySet();
+        if (address(key.hooks) != address(this)) revert WrongHook();
+
+        address c0 = Currency.unwrap(key.currency0);
+        address c1 = Currency.unwrap(key.currency1);
+        address q = vault.quote();
+        address r = vault.risky();
+        if (!((c0 == q && c1 == r) || (c0 == r && c1 == q))) revert PoolAssetsMismatch();
+
         venue = venue_;
+        riskyIsCurrency0 = (c0 == r);
     }
 
     // ---------------------------------------------------------------- active hooks

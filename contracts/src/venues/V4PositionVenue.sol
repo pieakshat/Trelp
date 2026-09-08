@@ -17,6 +17,7 @@ import {RangeMath} from "../libraries/RangeMath.sol";
 import {IPositionVenue} from "../interfaces/IPositionVenue.sol";
 import {ISpotSwapper} from "../interfaces/ISpotSwapper.sol";
 import {IQuoteOracle} from "../interfaces/IQuoteOracle.sol";
+import {IVaultPolicy} from "../interfaces/IVaultPolicy.sol";
 
 interface ITrancheVaultClaim {
     function seniorClaim() external view returns (uint256);
@@ -46,6 +47,7 @@ contract V4PositionVenue is IPositionVenue, IUnlockCallback {
     error NothingDeployed();
     error FloorCovenantBreached(uint256 floorValue, uint256 required);
     error InvalidRange(int24 tickLower, int24 tickUpper);
+    error PoolAssetsMismatch();
 
     event Deployed(uint256 quoteIn, uint256 riskyAcquired, uint128 liquidity);
     event RangeMoved(int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 floorValue);
@@ -93,6 +95,18 @@ contract V4PositionVenue is IPositionVenue, IUnlockCallback {
         uint256 floorMarginWad_
     ) {
         if (tickLower_ >= tickUpper_) revert InvalidRange(tickLower_, tickUpper_);
+
+        // The pair is the vault's, and the pool must be over exactly that pair.
+        if (address(quote_) != IVaultPolicy(vault_).quote() || address(risky_) != IVaultPolicy(vault_).risky()) {
+            revert PoolAssetsMismatch();
+        }
+        address c0 = Currency.unwrap(poolKey_.currency0);
+        address c1 = Currency.unwrap(poolKey_.currency1);
+        if (!((c0 == address(quote_) && c1 == address(risky_)) || (c0 == address(risky_) && c1 == address(quote_))))
+        {
+            revert PoolAssetsMismatch();
+        }
+
         poolManager = poolManager_;
         poolKey = poolKey_;
         vault = vault_;

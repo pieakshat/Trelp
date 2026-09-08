@@ -90,10 +90,10 @@ contract V4IntegrationTest is Test {
         // The hook address must encode its permissions, so mine before deploying. The venue needs a
         // PoolKey naming the hook, so the venue address is set on the hook afterwards.
         uint160 flags = Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_SWAP_FLAG;
-        bytes memory args = abi.encode(manager, IVaultPolicy(address(vault)), false, address(this));
+        bytes memory args = abi.encode(manager, IVaultPolicy(address(vault)), address(this));
         (address hookAddr, bytes32 salt) =
             HookMiner.find(address(this), flags, type(TrancheHook).creationCode, args);
-        hook = new TrancheHook{salt: salt}(manager, IVaultPolicy(address(vault)), false, address(this));
+        hook = new TrancheHook{salt: salt}(manager, IVaultPolicy(address(vault)), address(this));
         assertEq(address(hook), hookAddr, "mined address");
 
         poolKey = PoolKey({
@@ -117,7 +117,7 @@ contract V4IntegrationTest is Test {
             TICK_UPPER,
             0.05e18
         );
-        hook.setVenue(address(venue));
+        hook.setVenue(address(venue), poolKey);
         vm.prank(curator);
         vault.setVenues(
             IPositionVenue(address(venue)),
@@ -194,6 +194,54 @@ contract V4IntegrationTest is Test {
     function test_hookAddressEncodesItsPermissions() public view {
         uint160 flags = uint160(address(hook)) & Hooks.ALL_HOOK_MASK;
         assertEq(flags, Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_SWAP_FLAG, "0x880");
+    }
+
+    /// @notice The ordering the directional halt depends on is read off the pool key, not supplied.
+    function test_hookDerivesAssetOrderingFromTheKey() public view {
+        assertEq(Currency.unwrap(poolKey.currency0), address(quote), "quote sorts first here");
+        assertFalse(hook.riskyIsCurrency0(), "so risky is currency1, derived not declared");
+        assertEq(hook.venue(), address(venue));
+    }
+
+    /// @notice A key over the wrong pair cannot be wired in. Accepting one would invert the halt:
+    ///         the pool would refuse the de-risking side and serve the risk-increasing one.
+    function test_setVenueRejectsAPoolOverForeignAssets() public {
+        MockERC20 other = new MockERC20("Other", "OTH", 18);
+        (address addr2, bytes32 salt2) = HookMiner.find(
+            address(this),
+            Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_SWAP_FLAG,
+            type(TrancheHook).creationCode,
+            abi.encode(manager, IVaultPolicy(address(vault)), address(this))
+        );
+        TrancheHook hook2 = new TrancheHook{salt: salt2}(manager, IVaultPolicy(address(vault)), address(this));
+        assertEq(address(hook2), addr2);
+
+        (address lo, address hi) =
+            address(quote) < address(other) ? (address(quote), address(other)) : (address(other), address(quote));
+        PoolKey memory foreign = PoolKey({
+            currency0: Currency.wrap(lo),
+            currency1: Currency.wrap(hi),
+            fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
+            tickSpacing: TICK_SPACING,
+            hooks: IHooks(address(hook2))
+        });
+
+        vm.expectRevert(TrancheHook.PoolAssetsMismatch.selector);
+        hook2.setVenue(address(venue), foreign);
+    }
+
+    /// @notice And a key naming somebody else's hook is refused outright.
+    function test_setVenueRejectsAKeyNamingAnotherHook() public {
+        (, bytes32 salt2) = HookMiner.find(
+            address(this),
+            Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_SWAP_FLAG,
+            type(TrancheHook).creationCode,
+            abi.encode(manager, IVaultPolicy(address(vault)), address(this))
+        );
+        TrancheHook hook2 = new TrancheHook{salt: salt2}(manager, IVaultPolicy(address(vault)), address(this));
+
+        vm.expectRevert(TrancheHook.WrongHook.selector);
+        hook2.setVenue(address(venue), poolKey); // poolKey names the original hook
     }
 
     function test_activationSeedsThePoolAndNavTracksIt() public {
