@@ -21,8 +21,11 @@ contract MockERC20 is ERC20 {
     }
 }
 
+/// @dev Assumes the priced token has 18 decimals: the `1e18` divisor below is that token's scale,
+///      not a WAD. Fine for the WETH-like fixtures here, wrong for anything else — not a template
+///      for a real oracle, which must read the token's own decimals.
 contract MockOracle is IQuoteOracle {
-    /// @dev quote units per 1e18 of the risky token
+    /// @dev quote base units per 1e18 of the priced token
     mapping(address => uint256) public priceWad;
 
     function setPrice(address token, uint256 p) external {
