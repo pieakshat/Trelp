@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.26;
 
 /// @notice The venue that holds the LP position (the Uniswap v4 leg).
 /// @dev Kept behind an interface so the vault's epoch and waterfall logic is unit-testable without

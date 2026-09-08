@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.26;
 
 /// @notice Values a token amount in the vault's quote asset.
 /// @dev MUST be TWAP-backed in any real deployment. The coverage signal drives the breaker, and a

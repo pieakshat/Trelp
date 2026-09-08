@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.26;
 
 /// @title RiskPolicy
 /// @notice Turns the vault's solvency state into quoting instructions.

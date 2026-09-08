@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.26;
 
 /// @title SolvencyLib
 /// @notice Canonical tranche accounting for a single epoch: senior accrual, coverage, waterfall.

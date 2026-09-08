@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.26;
 
 /// @notice The venue the junior buffer quotes on (the 1inch Aqua leg).
 /// @dev Models Aqua's ACTUAL semantics, which differ from the build plan's assumption in a way that
