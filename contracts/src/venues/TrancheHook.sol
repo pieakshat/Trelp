@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.26;
 
-import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
-import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
-import {Hooks} from "v4-core/src/libraries/Hooks.sol";
-import {LPFeeLibrary} from "v4-core/src/libraries/LPFeeLibrary.sol";
-import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
-import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 
 import {RiskPolicy} from "../libraries/RiskPolicy.sol";
 
@@ -50,6 +50,8 @@ contract TrancheHook is IHooks {
     error LiquidityGated(address sender);
     error BiddingHalted();
     error InvalidHookAddress(uint160 actual, uint160 expected);
+    error NotAdmin();
+    error VenueAlreadySet();
 
     event FeeOverridden(uint24 feePips, bool bidAllowed);
 
@@ -64,22 +66,33 @@ contract TrancheHook is IHooks {
 
     IPoolManager public immutable poolManager;
     ITrancheVaultPolicy public immutable vault;
-    address public immutable venue;
+    address public immutable admin;
     bool public immutable riskyIsCurrency0;
+
+    /// @dev Not immutable: the venue needs a PoolKey that names this hook, so the hook must exist
+    ///      first. Settable exactly once, and the mined address commits to everything else.
+    address public venue;
 
     modifier onlyPoolManager() {
         if (msg.sender != address(poolManager)) revert NotPoolManager();
         _;
     }
 
-    constructor(IPoolManager poolManager_, ITrancheVaultPolicy vault_, address venue_, bool riskyIsCurrency0_) {
+    constructor(IPoolManager poolManager_, ITrancheVaultPolicy vault_, bool riskyIsCurrency0_, address admin_) {
         uint160 flags = uint160(address(this)) & Hooks.ALL_HOOK_MASK;
         if (flags != REQUIRED_FLAGS) revert InvalidHookAddress(flags, REQUIRED_FLAGS);
 
         poolManager = poolManager_;
         vault = vault_;
-        venue = venue_;
         riskyIsCurrency0 = riskyIsCurrency0_;
+        admin = admin_;
+    }
+
+    /// @notice Name the venue permitted to provide liquidity. One-time.
+    function setVenue(address venue_) external {
+        if (msg.sender != admin) revert NotAdmin();
+        if (venue != address(0)) revert VenueAlreadySet();
+        venue = venue_;
     }
 
     // ---------------------------------------------------------------- active hooks

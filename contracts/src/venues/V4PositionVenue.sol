@@ -1,19 +1,17 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.26;
 
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/src/utils/SafeTransferLib.sol";
 
-import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
-import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
-import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
-import {TickMath} from "v4-core/src/libraries/TickMath.sol";
-import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
-import {Currency} from "v4-core/src/types/Currency.sol";
-import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
-import {PoolKey} from "v4-core/src/types/PoolKey.sol";
-import {LiquidityAmounts} from "v4-periphery/src/libraries/LiquidityAmounts.sol";
-
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IUnlockCallback} from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {RangeMath} from "../libraries/RangeMath.sol";
 
 import {IPositionVenue} from "../interfaces/IPositionVenue.sol";
@@ -75,6 +73,10 @@ contract V4PositionVenue is IPositionVenue, IUnlockCallback {
     IQuoteOracle public immutable oracle;
     ISpotSwapper public immutable swapper;
 
+    /// @dev Nominal liquidity used only to read the range's composition ratio. Large enough that
+    ///      neither leg truncates to zero at realistic prices; the ratio itself is scale-invariant.
+    uint128 internal constant PROBE_LIQUIDITY = 1e24;
+
     /// @notice Extra coverage the range must preserve at its own floor, in WAD.
     uint256 public immutable floorMarginWad;
 
@@ -133,7 +135,7 @@ contract V4PositionVenue is IPositionVenue, IUnlockCallback {
         }
 
         (uint256 amount0, uint256 amount1) = _sortAmounts(quoteAmount - quoteForRisky, riskyAcquired);
-        uint128 target = LiquidityAmounts.getLiquidityForAmounts(
+        uint128 target = RangeMath.getLiquidityForAmounts(
             sqrtPriceX96, sqrtLower, sqrtUpper, amount0, amount1
         );
 
@@ -157,13 +159,22 @@ contract V4PositionVenue is IPositionVenue, IUnlockCallback {
         return _valueOf(amount0, amount1) + _idleValue();
     }
 
-    /// @notice What the position would be worth if price fell to its own lower bound.
-    /// @dev The covenant is written against this number because below `tickLower` the position is
-    ///      entirely the risky asset and loses value linearly, with no square-root cushion left.
+    /// @notice What the position would be worth at the bound where it holds only the risky asset.
+    /// @dev The covenant is written against this number because past that bound the position is
+    ///      fully converted and loses value linearly, with no square-root cushion left.
+    ///
+    ///      Which bound that is depends on token ordering, not on intuition: a pool price is
+    ///      currency1 per currency0, so the risky asset getting cheaper moves price DOWN when risky
+    ///      is currency0 and UP when it is currency1. Reading the lower tick unconditionally would
+    ///      measure the safe end of the range in half of all deployments and pass a covenant that
+    ///      protects nothing.
     function floorValue() public view returns (uint256) {
         if (liquidity == 0) return 0;
-        (uint256 amount0, uint256 amount1) = RangeMath.amountsAtFloor(
-            TickMath.getSqrtPriceAtTick(tickLower), TickMath.getSqrtPriceAtTick(tickUpper), liquidity
+        (uint256 amount0, uint256 amount1) = RangeMath.amountsAtRiskyBound(
+            TickMath.getSqrtPriceAtTick(tickLower),
+            TickMath.getSqrtPriceAtTick(tickUpper),
+            liquidity,
+            Currency.unwrap(poolKey.currency0) == address(risky)
         );
         return _valueOf(amount0, amount1);
     }
@@ -183,7 +194,7 @@ contract V4PositionVenue is IPositionVenue, IUnlockCallback {
 
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolKey.toId());
         (uint256 have0, uint256 have1) = _sortAmounts(quote.balanceOf(address(this)), risky.balanceOf(address(this)));
-        uint128 target = LiquidityAmounts.getLiquidityForAmounts(
+        uint128 target = RangeMath.getLiquidityForAmounts(
             sqrtPriceX96,
             TickMath.getSqrtPriceAtTick(newLower),
             TickMath.getSqrtPriceAtTick(newUpper),
@@ -290,25 +301,36 @@ contract V4PositionVenue is IPositionVenue, IUnlockCallback {
     }
 
     /// @dev Fraction of the deposit that must become the risky leg for the range's ratio at spot.
-    ///      Derived from the liquidity the quote leg alone would support: the risky leg needed
-    ///      against that liquidity, valued at the oracle, is the share to convert.
+    /// @dev Computed from the ratio the range wants, not from a liquidity probe. Probing with
+    ///      quote-only amounts returns zero liquidity, because `getLiquidityForAmounts` takes the
+    ///      MINIMUM of the two single-sided answers and the missing leg pins it to zero.
+    ///      Evaluating a nominal liquidity and valuing both legs is scale-invariant and well
+    ///      behaved everywhere inside the range.
     function _quoteShareForRiskyLeg(
         uint256 quoteAmount,
         uint160 sqrtPriceX96,
         uint160 sqrtLower,
         uint160 sqrtUpper
     ) internal view returns (uint256) {
-        if (sqrtPriceX96 <= sqrtLower) return quoteAmount; // range entirely above spot: all risky
-        if (sqrtPriceX96 >= sqrtUpper) return 0; // range entirely below spot: all quote
+        if (sqrtPriceX96 <= sqrtLower) {
+            // Position would be entirely currency0 at this price.
+            return Currency.unwrap(poolKey.currency0) == address(quote) ? 0 : quoteAmount;
+        }
+        if (sqrtPriceX96 >= sqrtUpper) {
+            // Position would be entirely currency1.
+            return Currency.unwrap(poolKey.currency0) == address(quote) ? quoteAmount : 0;
+        }
 
-        (uint256 probe0, uint256 probe1) = _sortAmounts(quoteAmount, 0);
-        uint128 l = LiquidityAmounts.getLiquidityForAmounts(sqrtPriceX96, sqrtLower, sqrtUpper, probe0, probe1);
-        (uint256 need0, uint256 need1) = RangeMath.amountsForLiquidity(sqrtPriceX96, sqrtLower, sqrtUpper, l);
-        (, uint256 needRisky) = Currency.unwrap(poolKey.currency0) == address(quote)
-            ? (need0, need1)
-            : (need1, need0);
+        (uint256 probe0, uint256 probe1) = RangeMath.amountsForLiquidity(
+            sqrtPriceX96, sqrtLower, sqrtUpper, PROBE_LIQUIDITY
+        );
+        (uint256 quoteLeg, uint256 riskyLeg) = Currency.unwrap(poolKey.currency0) == address(quote)
+            ? (probe0, probe1)
+            : (probe1, probe0);
 
-        uint256 riskyValue = needRisky == 0 ? 0 : oracle.valueInQuote(address(risky), needRisky);
-        return riskyValue >= quoteAmount ? quoteAmount / 2 : riskyValue;
+        uint256 riskyLegValue = riskyLeg == 0 ? 0 : oracle.valueInQuote(address(risky), riskyLeg);
+        uint256 total = quoteLeg + riskyLegValue;
+        if (total == 0) return 0;
+        return (quoteAmount * riskyLegValue) / total;
     }
 }
