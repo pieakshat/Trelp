@@ -18,29 +18,22 @@ import {IBufferStrategy} from "../interfaces/IBufferStrategy.sol";
 /// @title BufferStrategy
 /// @notice The junior buffer's Aqua program: a single-sided concentrated bid, funded only by quote.
 ///
-/// @dev WHY THIS SHAPE. The buffer's job is to *be there*, not to earn. A two-sided market maker
-///      holds inventory in the risky asset — correlated with the exact drawdown the buffer exists
-///      to absorb — which would recreate the problem one level out. What we want is a standing bid
-///      that converts only when someone hits it at a discount.
+/// @dev The buffer's job is to be available, not to earn. A two-sided maker would hold inventory
+///      in the risky asset, correlated with the drawdown the buffer exists to absorb; a standing
+///      bid converts only when someone hits it at a discount.
 ///
-///      Aqua-backed SwapVM programs are 2D AMM strategies; the 1D limit-order family uses
-///      `StaticBalances` and is not Aqua-backed. So the bid is expressed as a *concentrated range
-///      placed below spot*, which is the AMM spelling of a limit-order ladder.
+///      Aqua-backed programs are 2D AMM strategies, so that bid is expressed as a concentrated
+///      range below spot — the AMM spelling of a limit-order ladder. It works with a zero risky
+///      balance because `XYCConcentrateSwap` derives virtual reserves from the price bounds, and
+///      clamps payout to the real balance:
 ///
-///      That works with **zero risky balance**, which is the non-obvious part.
-///      `XYCConcentrateSwap` adds virtual reserves derived from the price bounds on top of the real
-///      Aqua balances, so the curve stays well defined with one side empty. And its partial-fill
-///      clamp caps `amountOut` at the real balance. Together:
+///        • a taker selling risky is filled from our real quote balance → the bid works
+///        • a taker trying to buy risky clamps to zero                  → nothing to give
 ///
-///        • a taker selling risky to us is filled from our real quote balance   → the bid works
-///        • a taker trying to buy risky from us clamps to zero                  → nothing to give
+///      So the vault ships quote alone and needs no risky seed.
 ///
-///      So the vault ships quote alone and never needs a risky seed to open the buffer.
-///
-///      COVERAGE AWARENESS. `Extruction` runs after the curve and hands the swap registers to
-///      `SolvencyAdjuster`, which widens the bid in proportion to the vault's distress and reverts
-///      once the policy stops bidding. It is a stock opcode, so the official deployed SwapVM is
-///      enough — no redeployment.
+///      `Extruction` hands the swap registers to `SolvencyAdjuster`, which anchors the bid to the
+///      oracle and widens it with distress. Omitting that term disables coverage-aware pricing.
 contract BufferStrategy is IBufferStrategy {
     error TokensNotSorted();
 
@@ -59,15 +52,14 @@ contract BufferStrategy is IBufferStrategy {
     uint256 public immutable sqrtPriceMin;
     uint256 public immutable sqrtPriceMax;
 
-    /// @notice Extruction target that prices the bid off vault solvency. Zero disables it,
-    ///         which is what demo path 4 ("breaker off") flips.
+    /// @notice Extruction target that prices the bid off vault solvency. Zero disables it.
     address public immutable adjuster;
 
     /// @notice Maker fee on the way in, basis points.
     uint24 public immutable feeBps;
 
-    /// @dev Distinguishes otherwise identical strategies. Aqua rejects a re-ship of the same hash,
-    ///      so a vault re-opening a buffer on the same terms needs a fresh salt.
+    /// @dev Aqua rejects a re-ship of the same hash, so a buffer re-opened on the same terms
+    ///      needs a fresh salt.
     uint64 public immutable salt;
 
     constructor(
@@ -107,7 +99,7 @@ contract BufferStrategy is IBufferStrategy {
 
         ISwapVM.Order memory order = MakerTraitsLib.build(
             MakerTraitsLib.Args({
-                maker: msg.sender, // the vault ships for itself; Aqua keys the maker off msg.sender
+                maker: msg.sender, // Aqua keys the maker off msg.sender
                 receiver: address(0),
                 tokenA: tokenA,
                 tokenB: tokenB,
@@ -134,7 +126,7 @@ contract BufferStrategy is IBufferStrategy {
         amounts = new uint256[](2);
         tokens[0] = tokenA;
         tokens[1] = tokenB;
-        // Quote only. The risky side opens empty and can only be filled into, never drawn from.
+        // Quote only: the risky side opens empty and can be filled into, never drawn from.
         if (tokenA == quote) {
             amounts[0] = quoteAmount;
         } else {

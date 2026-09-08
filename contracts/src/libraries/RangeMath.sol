@@ -7,11 +7,10 @@ import {SqrtPriceMath} from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
 
 /// @title RangeMath
 /// @notice Position composition for a concentrated range, and the floor the range covenant uses.
-/// @dev Both directions live here rather than pulling in v4-periphery. Periphery ships
-///      `getLiquidityForAmounts` but not its inverse, and its own `remappings.txt` resolves v4-core
-///      to a nested copy -- importing it alongside our own v4-core makes solc load every core
-///      interface twice and reject the duplicates. Two small functions are cheaper than that.
-///      Pure, so the covenant governing the curator's range authority is testable without a fork.
+/// @dev Both directions live here rather than pulling in v4-periphery, which ships
+///      `getLiquidityForAmounts` but not its inverse and resolves v4-core to a nested copy —
+///      importing it alongside our own makes solc load every core interface twice. Pure, so the
+///      covenant governing the curator's range authority is testable without a fork.
 library RangeMath {
     /// @notice Amounts of currency0 and currency1 backing `liquidity` at the given price.
     function amountsForLiquidity(
@@ -35,15 +34,14 @@ library RangeMath {
     }
 
     /// @notice Composition at whichever bound leaves the position holding only the risky asset.
-    /// @dev This is the number the range covenant is written against, and picking the right bound
-    ///      matters more than it looks. A v4 pool price is currency1 per currency0, so the risky
-    ///      asset getting CHEAPER moves the price down only when risky is currency0; when risky is
-    ///      currency1 the same move pushes the price UP. The bound where senior is most exposed is
-    ///      therefore the lower tick in the first case and the upper tick in the second.
+    /// @dev A pool price is currency1 per currency0, so the risky asset getting cheaper moves the
+    ///      price down only when risky is currency0; when it is currency1 the same move pushes the
+    ///      price up. The exposed bound is therefore the lower tick in the first case and the upper
+    ///      tick in the second.
     ///
-    ///      Beyond that bound the position is fully converted, so its composition stops changing
-    ///      and its value tracks price one-for-one. There is no square-root cushion left down
-    ///      there, which is why senior's protection must be intact at the bound rather than at spot.
+    ///      Past that bound the position is fully converted, so composition stops changing and
+    ///      value tracks price one-for-one — no square-root cushion left. Senior's protection has
+    ///      to be intact there, not merely at spot.
     function amountsAtRiskyBound(
         uint160 sqrtLowerX96,
         uint160 sqrtUpperX96,

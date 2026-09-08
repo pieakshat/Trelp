@@ -3,8 +3,8 @@ pragma solidity ^0.8.26;
 
 /// @title SolvencyLib
 /// @notice Canonical tranche accounting for a single epoch: senior accrual, coverage, waterfall.
-/// @dev Every number the protocol settles on and the front end projects MUST come from here, so
-///      that onchain settlement and offchain scenario analysis cannot drift apart.
+/// @dev Every number the protocol settles on and the front end projects comes from here, so
+///      onchain settlement and offchain scenario analysis cannot drift apart.
 ///
 ///      Conventions:
 ///      - amounts are quote-token base units (e.g. USDC 1e6)
@@ -63,14 +63,14 @@ library SolvencyLib {
     }
 
     /// @notice The split `s` that keeps junior ahead of simply LPing the pool, at ANY fee yield.
-    /// @dev Requiring junior's return to beat the unlevered pool return and taking the worst case
-    ///      over all fee yields makes the fee term drop out entirely, leaving
+    /// @dev Requiring junior to beat the unlevered pool return, worst case over all fee yields,
+    ///      makes the fee term drop out entirely and leaves
     ///
     ///          s  <=  (1 - 2j) / (1 - j)
     ///
-    ///      `lambdaWad` is the fraction of that envelope senior is actually given, and is the only
-    ///      curator input. Returns 0 at j >= 50%, where no split can make junior worth doing --
-    ///      so the 50% wall is arithmetic here rather than a hardcoded guard elsewhere.
+    ///      `lambdaWad` is the fraction of that envelope senior is given, and is the only curator
+    ///      input. Returns 0 at j >= 50%, where no split makes junior worth doing, so that wall is
+    ///      arithmetic rather than a separate guard.
     function splitFromJuniorShare(uint256 jWad, uint256 lambdaWad)
         internal
         pure
@@ -81,18 +81,16 @@ library SolvencyLib {
     }
 
     /// @notice The senior claim that settles: S0 + min(S0 * c, s * max(0, NAV - V0)).
-    /// @dev Anchored on NET epoch P&L, not gross fee income. Earning spread while being adversely
+    /// @dev Anchored on net epoch P&L, not gross fee income: earning spread while being adversely
     ///      selected is not income, and a gross-fee split would overpay senior in exactly the
-    ///      epochs where junior is absorbing the loss. It also means the vault needs no fee oracle
-    ///      from the venue: NAV is sufficient.
+    ///      epochs where junior absorbs the loss. NAV is then sufficient — no fee oracle needed.
     ///
     ///      The `min` is the split clause. In a losing epoch the gain is zero and senior receives
-    ///      no coupon at all -- only principal priority, which is the correct behaviour.
+    ///      principal priority and no coupon.
     ///
-    ///      NOTE ON THE `max_rate` CAP IN THE ORIGINAL PLAN: a cap above the fixed rate can never
-    ///      bind, because min(S0*c, s*gain) <= S0*c by construction. The fixed rate IS the cap on
-    ///      senior upside. `maxCouponWad` is enforced by TrancheVault as a bound on the curator's
-    ///      choice of `c`, not as a third term here.
+    ///      The fixed rate is itself the cap on senior upside, since min(S0*c, s*gain) <= S0*c.
+    ///      `maxCouponWad` bounds the curator's choice of `c` in TrancheVault; it is not a term
+    ///      here.
     /// @param nav Net asset value at settlement, in quote base units
     function finalSeniorClaim(Terms memory t, uint256 nav) internal pure returns (uint256) {
         uint256 v0 = totalPrincipal(t);

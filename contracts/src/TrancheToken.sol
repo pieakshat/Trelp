@@ -4,8 +4,8 @@ pragma solidity ^0.8.26;
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 
 /// @notice A transferable claim on one tranche of a vault epoch.
-/// @dev Claims are ERC-20 because secondary trading is the only exit during the active phase
-///      (plan §4). Mint and burn are vault-only.
+/// @dev ERC-20 because secondary trading is the only exit during the active phase. Mint and burn
+///      are vault-only.
 contract TrancheToken is ERC20 {
     error NotVault();
 

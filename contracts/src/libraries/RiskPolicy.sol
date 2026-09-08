@@ -4,21 +4,18 @@ pragma solidity ^0.8.26;
 /// @title RiskPolicy
 /// @notice Turns the vault's solvency state into quoting instructions.
 ///
-/// @dev This is the breaker. The original plan modelled it as three stages -- widen and skew, flip
-///      the range above spot, then a keeper market-sell -- because a Uniswap v4 position cannot
-///      express any of them directly. Priced as a function instead, all three are regions of one
-///      curve in the distress signal `d`, plus a revocation the vault owns:
+/// @dev The breaker, as one curve in the distress signal `d` rather than a set of stages:
 ///
 ///          d = 0            quote normally
-///          0 < d < cutoff   widen the spread, skew away from the side we are accumulating
-///          d >= cutoff      stop bidding entirely; sell-only
+///          0 < d < cutoff   widen the spread, skew away from the side being accumulated
+///          d >= cutoff      stop bidding; sell-only
 ///          inventory cap    stop bidding regardless of d
 ///
-///      Pure and venue-agnostic, so the same policy drives the v4 hook's dynamic fee and the Aqua
-///      buffer's quote, and paths 3 and 4 of the demo differ by one boolean.
+///      Pure and venue-agnostic, so one policy drives both the v4 hook's dynamic fee and the Aqua
+///      buffer's quote.
 ///
-///      INVARIANT: nothing here may read a venue's mark. NAV feeds coverage feeds this, so a venue
-///      that priced off the policy would close a read loop.
+///      Invariant: nothing here may read a venue's mark. NAV feeds coverage feeds this, so a venue
+///      pricing off the policy would close a read loop.
 library RiskPolicy {
     uint256 internal constant WAD = 1e18;
 

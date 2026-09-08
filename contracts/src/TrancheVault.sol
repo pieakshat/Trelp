@@ -16,15 +16,14 @@ import {TrancheToken} from "./TrancheToken.sol";
 /// @notice A single-epoch tranched LP position: senior takes a capped, fee-dependent claim paid
 ///         first; junior takes first loss and the entire residual.
 ///
-/// @dev SCOPE. One vault instance runs exactly one epoch and terminates in `Settled`. Rolling is a
-///      new deployment. This removes a whole class of cross-epoch accounting bugs and costs nothing
-///      the demo needs. Auto-roll (plan §4) is a router on top, not vault state.
+/// @dev One instance runs one epoch and terminates in `Settled`; rolling is a new deployment,
+///      which removes cross-epoch accounting state entirely.
 ///
-///      PHASES. Subscription -> Active -> Unwinding -> Settled. There is deliberately no
-///      entry or exit during Active: the senior coupon is only quotable against a known `j`, and
-///      redemption at NAV mid-drawdown would let junior exit before absorbing the loss it exists to
-///      absorb. `Unwinding` is split out from `Settled` because the forced unwind is a real,
-///      scheduled market order whose cost is recorded in `unwindCost` rather than hidden.
+///      Phases: Subscription -> Active -> Unwinding -> Settled. There is no entry or exit during
+///      Active — the senior coupon is only quotable against a known `j`, and redemption at NAV
+///      mid-drawdown would let junior exit before absorbing the loss it exists to absorb.
+///      `Unwinding` is separate from `Settled` so the cost of the forced conversion is recorded in
+///      `unwindCost` rather than hidden.
 contract TrancheVault {
     using SafeTransferLib for ERC20;
 
@@ -85,7 +84,7 @@ contract TrancheVault {
     ///                             plan's `max_rate` cannot be a third term in the payout.
     /// @param minJuniorShareWad    reject epochs with too thin a buffer to be worth structuring
     /// @param maxJuniorShareWad    reject epochs that are really just a junior-only LP vault
-    /// @param bufferShipShareWad   fraction of J shipped to the buffer venue (the §8 frontier knob)
+    /// @param bufferShipShareWad   fraction of J shipped to the buffer rather than the pool
     /// @param bufferCallCoverageWad  b threshold below which `callBuffer()` is permissionless
     /// @param minRebalanceCoverageWad  b floor below which the range freezes
     /// @param risk                 quoting policy, shared by every venue
@@ -126,9 +125,8 @@ contract TrancheVault {
     IPositionVenue public positionVenue;
     IBufferStrategy public bufferStrategy;
 
-    /// @dev Aqua records the maker as `msg.sender`, so the vault ships for itself. That is the
-    ///      point rather than an inconvenience: the capital never leaves this contract, which is
-    ///      why `nav()` already counts it and must not add a venue balance on top.
+    /// @dev Aqua records the maker as `msg.sender`, so the vault ships for itself. The capital
+    ///      never leaves this contract, which is why `nav()` already counts it.
     bytes32 public bufferStrategyHash;
     address public bufferApp;
     address[] internal bufferTokens;
@@ -139,12 +137,12 @@ contract TrancheVault {
     SolvencyLib.Terms public terms;
 
     /// @notice Quote value lost converting the position back to the quote asset at settlement.
-    /// @dev Every epoch ends in a scheduled, publicly known unwind. Recording it keeps that cost in
-    ///      the returns rather than outside them.
+    /// @dev Every epoch ends in a scheduled, publicly known conversion. Recording it keeps that
+    ///      cost inside the reported returns.
     uint256 public unwindCost;
     /// @notice Cumulative quote value lost to curator range moves.
-    /// @dev Range authority is discretion that lands on senior, so it is measured. Junior can read
-    ///      what curator activity cost them instead of inferring it from the final number.
+    /// @dev Range authority is discretion that lands on senior, so its cost is measured rather
+    ///      than inferred from the final number.
     uint256 public rebalanceCost;
     uint32 public rebalanceCount;
     uint64 public lastRebalanceAt;
@@ -181,8 +179,8 @@ contract TrancheVault {
         junior = new TrancheToken("Trelp Junior Claim", "trJNR", d, address(this));
     }
 
-    /// @dev Venues are wired after construction because they need the vault address. One-time and
-    ///      subscription-only, so depositors can see the venues before the epoch activates.
+    /// @dev Wired after construction because venues need the vault address. One-time and
+    ///      subscription-only, so depositors see the venues before activation.
     function setVenues(IPositionVenue positionVenue_, IBufferStrategy bufferStrategy_) external {
         if (msg.sender != curator) revert NotCurator();
         if (phase != Phase.Subscription) revert WrongPhase();
@@ -199,8 +197,8 @@ contract TrancheVault {
         _deposit(junior, assets, false);
     }
 
-    /// @dev Capital is idle during subscription, so claims mint 1:1 with deposits and no share
-    ///      price is needed. This is what makes `j` unambiguous at activation.
+    /// @dev Capital is idle during subscription, so claims mint 1:1 and no share price is needed.
+    ///      That is what makes `j` unambiguous at activation.
     function _deposit(TrancheToken token, uint256 assets, bool isSenior) internal {
         if (phase != Phase.Subscription) revert WrongPhase();
         if (block.timestamp >= config.subscriptionEnd) revert SubscriptionClosed();
@@ -268,9 +266,8 @@ contract TrancheVault {
     }
 
     /// @notice NAV(t), in quote base units.
-    /// @dev Buffer capital shipped to Aqua is deliberately absent as a separate term. Aqua holds
-    ///      nothing, so that capital is already inside this contract's own token balances. Adding
-    ///      `shippedQuote` here would double-count it.
+    /// @dev Shipped buffer capital is absent as a separate term on purpose: Aqua holds nothing, so
+    ///      it is already inside this contract's balances. Adding `shippedQuote` would double-count.
     function nav() public view returns (uint256 total) {
         total = quote.balanceOf(address(this));
 
@@ -295,10 +292,9 @@ contract TrancheVault {
     /// @notice Revoke the buffer's Aqua strategy, converting junior's capital from a committed
     ///         quoting position back into idle loss absorption.
     /// @dev Permissionless once coverage breaches the threshold; the curator may call any time.
-    ///      This is stage 1.5 of the breaker.
     ///
-    ///      TODO(breaker): the real trigger must read a TWAP and require the breach to persist for
-    ///      N blocks, so a single-block manipulation cannot force the call (plan §11).
+    ///      TODO: read a TWAP and require the breach to persist several blocks, so a single-block
+    ///      price move cannot force the call.
     function callBuffer() external {
         if (phase != Phase.Active) revert WrongPhase();
         if (!bufferShipped) revert NothingShipped();
@@ -313,8 +309,8 @@ contract TrancheVault {
         emit BufferCalled(msg.sender, b, shipped);
     }
 
-    /// @dev Ship the buffer as virtual balances. No tokens move: Aqua records an allowance against
-    ///      this contract's wallet and pulls only at fill time.
+    /// @dev No tokens move: Aqua records an allowance against this contract and pulls at fill
+    ///      time.
     function _ship(uint256 quoteAmount) internal {
         (address app, bytes memory strategy, address[] memory tokens, uint256[] memory amounts) =
             bufferStrategy.shipParams(quoteAmount);
@@ -332,9 +328,8 @@ contract TrancheVault {
         bufferShipped = true;
     }
 
-    /// @dev Revoke the strategy. A permission change, not a withdrawal, so it cannot fail for
-    ///      liquidity reasons. Aqua requires every token in the strategy to be closed at once,
-    ///      which is why a partial call would need a second shipped strategy.
+    /// @dev A permission change, not a withdrawal, so it cannot fail for liquidity reasons. Aqua
+    ///      closes every token at once, so a partial call would need a second shipped strategy.
     function _dock() internal {
         aqua.dock(bufferApp, bufferStrategyHash, bufferTokens);
         bufferShipped = false;
@@ -343,10 +338,9 @@ contract TrancheVault {
     }
 
     /// @notice Add quote to the vault without minting any claim.
-    /// @dev The minimal, unambiguous form of a junior cure right: it lifts coverage and can stop the
-    ///      breaker firing, with no mid-epoch share price to argue about. A donor recovers it only
-    ///      through the junior residual, so it is rational only for a concentrated junior holder.
-    ///      A share-minting cure is the better product and the open design question.
+    /// @dev A cure right with no mid-epoch share price to settle: it lifts coverage and can stop
+    ///      the breaker firing. The donor recovers it only through the junior residual, so it is
+    ///      rational only for a concentrated junior holder.
     function donate(uint256 assets) external {
         if (phase != Phase.Active) revert WrongPhase();
         if (assets == 0) revert ZeroAmount();
@@ -373,11 +367,9 @@ contract TrancheVault {
     }
 
     /// @notice Run the waterfall and open redemptions.
-    /// @dev Requires the risky leg to be flat. The vault quotes its way out over `unwindWindow`
-    ///      rather than market-selling: every epoch ends in a scheduled, publicly known conversion,
-    ///      and an auction at a widening discount is a better exit than a market order at a time
-    ///      everyone can predict. A market sell inside settlement would also be an unpriced,
-    ///      unbounded action in the middle of the accounting step.
+    /// @dev Requires the risky leg to be flat. The leg is quoted out over `unwindWindow` rather
+    ///      than sold here: a market order inside settlement would be an unpriced, unbounded action
+    ///      in the middle of the accounting step, at a time everyone can predict.
     function settle() external {
         if (phase != Phase.Unwinding) revert WrongPhase();
         uint256 riskyBalance = risky.balanceOf(address(this));
@@ -418,18 +410,14 @@ contract TrancheVault {
     // ---------------------------------------------------------------- range authority
 
     /// @notice Move the LP position to a new range.
-    /// @dev Naive rebalancing is strictly worse for senior than a static range: re-centring
-    ///      downward after a fall sells the accumulated asset at the bottom and re-arms the same
-    ///      exposure from a lower base, and in a trend that compounds until senior's protection is
-    ///      gone with no single event to point at.
+    /// @dev Unbounded rebalancing is worse for senior than a static range: re-centring downward
+    ///      after a fall sells the accumulated asset at the bottom and re-arms from a lower base,
+    ///      which compounds through a trend with no single event to point at.
     ///
-    ///      So this is discretion inside a covenant box, the way a managed securitisation works:
-    ///        - the vault enforces policy: a coverage floor and a cooldown, and it measures cost;
-    ///        - the venue enforces the range covenant: the position's value at its own lower bound
-    ///          must still cover the senior claim with margin.
-    ///
-    ///      The coverage floor matters most. Exactly when a curator is most tempted to fix things
-    ///      is when re-centring does the most damage, so the range freezes in distress.
+    ///      So the authority is bounded on both sides. The vault enforces a coverage floor and a
+    ///      cooldown and measures the cost; the venue enforces the range covenant, since only it
+    ///      knows the range. The floor matters most: re-centring does the most damage exactly when
+    ///      a curator is most tempted to reach for it.
     function rebalance(bytes calldata venueData) external {
         if (msg.sender != curator) revert NotCurator();
         if (phase != Phase.Active) revert WrongPhase();
@@ -463,10 +451,9 @@ contract TrancheVault {
     }
 
     /// @notice The hard ceiling on convertible capital.
-    /// @dev An oracle deviation band caps what an adversary extracts per fill, not per epoch, so a
-    ///      band alone does not bound total loss -- an underwater junior can simply loop it. This
-    ///      ceiling is the structural control, sized against principal so that inventory conversion
-    ///      cannot cost more than junior's buffer absorbs.
+    /// @dev A deviation band caps extraction per fill, not per epoch, so it does not bound total
+    ///      loss on its own — an underwater junior can loop it. This ceiling is the structural
+    ///      control, sized so inventory conversion cannot cost more than junior's buffer absorbs.
     function maxRiskyValue() public view returns (uint256) {
         return (SolvencyLib.totalPrincipal(terms) * config.risk.maxInventoryWad) / WAD;
     }

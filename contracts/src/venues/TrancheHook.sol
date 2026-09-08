@@ -15,30 +15,24 @@ import {RiskPolicy} from "../libraries/RiskPolicy.sol";
 /// @title TrancheHook
 /// @notice Enforces the vault's solvency policy at the pool boundary.
 ///
-/// @dev Three jobs, deliberately no more. The original plan put a three-stage breaker in the hook;
-///      the pricing curve now lives in `RiskPolicy` and is shared with the Aqua venue, so all this
-///      contract does is apply it:
+/// @dev The pricing curve lives in `RiskPolicy` and is shared with the Aqua venue, so this hook
+///      only applies it, in three places:
 ///
 ///      1. `beforeAddLiquidity` gates the pool to the vault's venue. Outside liquidity would dilute
-///         senior's claim on fee income, so the vault is the sole LP by construction rather than by
-///         convention.
-///      2. `beforeSwap` overrides the LP fee from the policy's spread. As coverage thins the pool
-///         gives up fee income to cut adverse selection.
-///      3. `beforeSwap` refuses swaps that would push more of the risky asset onto the vault once
-///         the policy stops bidding.
+///         senior's claim on fee income, so sole-LP is structural rather than conventional.
+///      2. `beforeSwap` overrides the LP fee from the policy's spread, giving up fee income to cut
+///         adverse selection as coverage thins.
+///      3. `beforeSwap` refuses swaps that would push more risky inventory onto the vault once the
+///         policy stops bidding.
 ///
-///      That third job is worth spelling out. A v4 dynamic fee is symmetric and cannot skew, which
-///      is why the original plan reached for burning and re-minting the range above spot. That hack
-///      pins the pool price -- with no depth below, the pool simply cannot trade down, the quote
-///      goes stale against the outside market, and whoever trades first when it is re-armed
-///      collects the whole accumulated gap. A directional refusal achieves the same intent ("buyers
-///      may buy from us, nobody may sell to us") with no position churn and no stale quote: the
-///      pool keeps quoting the side that reduces our risk and declines the side that increases it.
-///      It is a hard stop rather than a price signal, and it is honest about being one.
+///      The third is a hard stop, not a price signal, because a v4 dynamic fee is symmetric and
+///      cannot skew. The alternative — re-minting the range above spot — pins the pool price: with
+///      no depth below it cannot trade down, the quote goes stale against the market, and whoever
+///      trades first on re-arming collects the accumulated gap. A directional refusal keeps quoting
+///      the side that reduces risk and declines the side that increases it.
 ///
-///      REQUIRED ADDRESS FLAGS: BEFORE_ADD_LIQUIDITY_FLAG | BEFORE_SWAP_FLAG == 0x880.
-///      The pool must also be initialised with `LPFeeLibrary.DYNAMIC_FEE_FLAG` or the fee override
-///      is ignored.
+///      Required address flags: BEFORE_ADD_LIQUIDITY_FLAG | BEFORE_SWAP_FLAG == 0x880. The pool
+///      must also be initialised with `LPFeeLibrary.DYNAMIC_FEE_FLAG` or the override is ignored.
 contract TrancheHook is IHooks {
     using LPFeeLibrary for uint24;
 
@@ -55,8 +49,8 @@ contract TrancheHook is IHooks {
     /// @dev 1e18 spread -> 1e6 pips, so a WAD spread divides down by 1e12.
     uint256 internal constant WAD_TO_PIPS = 1e12;
 
-    /// @dev Ceiling on the overridden fee. `LPFeeLibrary.MAX_LP_FEE` is 100%, which would be a
-    ///      denial of service dressed up as a price; 10% is already far outside normal flow.
+    /// @dev `LPFeeLibrary.MAX_LP_FEE` is 100%, which is a denial of service dressed as a price.
+    ///      10% is already far outside normal flow.
     uint24 internal constant MAX_OVERRIDE_PIPS = 100_000;
 
     uint160 internal constant REQUIRED_FLAGS = Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_SWAP_FLAG;
@@ -66,8 +60,8 @@ contract TrancheHook is IHooks {
     address public immutable admin;
     bool public immutable riskyIsCurrency0;
 
-    /// @dev Not immutable: the venue needs a PoolKey that names this hook, so the hook must exist
-    ///      first. Settable exactly once, and the mined address commits to everything else.
+    /// @dev Not immutable: the venue needs a PoolKey naming this hook, so the hook exists first.
+    ///      Settable once; the mined address commits to everything else.
     address public venue;
 
     modifier onlyPoolManager() {

@@ -34,17 +34,16 @@ interface ITrancheVaultClaim {
 /// @title V4PositionVenue
 /// @notice Holds the vault's Uniswap v4 position and enforces the range covenant.
 ///
-/// @dev SEEDING. Subscription takes quote only, but a range straddling spot needs both currencies,
-///      and our own pool is empty until we mint into it. So `deploy` converts part of the quote
-///      through an external spot venue first, then mints. That conversion is a real cost and is
-///      visible to the vault as the gap between capital deployed and position value.
+/// @dev Seeding: subscription takes quote only, but a range straddling spot needs both currencies
+///      and our own pool is empty until minted into. `deploy` converts part of the quote through an
+///      external venue first. That conversion is a real cost, visible to the vault as the gap
+///      between capital deployed and position value.
 ///
-///      RANGE COVENANT. The curator may move the range, but only to one whose value at its OWN
-///      lower bound still covers the senior claim with margin. Below `tickLower` the position is
-///      100% of the risky asset and its value falls linearly rather than by square root, so the
-///      cushion disappears exactly where senior needs it -- which is why the covenant is written
-///      against the floor rather than against spot. The vault enforces the policy half (coverage
-///      floor, cooldown, cost accounting); only this contract knows the range.
+///      Range covenant: the curator may move the range, but only to one whose value at the bound
+///      where the position holds only risky still covers the senior claim with margin. Past that
+///      bound the position is fully converted and loses value linearly rather than by square root,
+///      so the cushion is gone exactly where senior needs it. The vault enforces the policy half —
+///      coverage floor, cooldown, cost accounting; only this contract knows the range.
 contract V4PositionVenue is IPositionVenue, IUnlockCallback {
     using SafeTransferLib for ERC20;
     using StateLibrary for IPoolManager;
@@ -73,8 +72,8 @@ contract V4PositionVenue is IPositionVenue, IUnlockCallback {
     IQuoteOracle public immutable oracle;
     ISpotSwapper public immutable swapper;
 
-    /// @dev Nominal liquidity used only to read the range's composition ratio. Large enough that
-    ///      neither leg truncates to zero at realistic prices; the ratio itself is scale-invariant.
+    /// @dev Reads the range's composition ratio only. Large enough that neither leg truncates to
+    ///      zero at realistic prices; the ratio is scale-invariant.
     uint128 internal constant PROBE_LIQUIDITY = 1e24;
 
     /// @notice Extra coverage the range must preserve at its own floor, in WAD.
@@ -160,14 +159,10 @@ contract V4PositionVenue is IPositionVenue, IUnlockCallback {
     }
 
     /// @notice What the position would be worth at the bound where it holds only the risky asset.
-    /// @dev The covenant is written against this number because past that bound the position is
-    ///      fully converted and loses value linearly, with no square-root cushion left.
-    ///
-    ///      Which bound that is depends on token ordering, not on intuition: a pool price is
-    ///      currency1 per currency0, so the risky asset getting cheaper moves price DOWN when risky
-    ///      is currency0 and UP when it is currency1. Reading the lower tick unconditionally would
-    ///      measure the safe end of the range in half of all deployments and pass a covenant that
-    ///      protects nothing.
+    /// @dev Which bound that is depends on token ordering: a pool price is currency1 per
+    ///      currency0, so the risky asset getting cheaper moves price down when risky is currency0
+    ///      and up when it is currency1. Reading the lower tick unconditionally would measure the
+    ///      safe end of the range in half of all deployments.
     function floorValue() public view returns (uint256) {
         if (liquidity == 0) return 0;
         (uint256 amount0, uint256 amount1) = RangeMath.amountsAtRiskyBound(
@@ -215,9 +210,8 @@ contract V4PositionVenue is IPositionVenue, IUnlockCallback {
     // ---------------------------------------------------------------- unwind
 
     /// @inheritdoc IPositionVenue
-    /// @dev Returns both currencies to the vault rather than selling the risky leg here. Settlement
-    ///      liquidates by quoting over the unwind window; a market sell inside this call would be an
-    ///      unpriced, unbounded action at a time everyone can predict.
+    /// @dev Returns both currencies to the vault rather than selling the risky leg. Settlement
+    ///      quotes it out over the unwind window instead.
     function unwind() external onlyVault returns (uint256 quoteReturned) {
         if (liquidity != 0) {
             _modify(-int256(uint256(liquidity)));
@@ -301,11 +295,10 @@ contract V4PositionVenue is IPositionVenue, IUnlockCallback {
     }
 
     /// @dev Fraction of the deposit that must become the risky leg for the range's ratio at spot.
-    /// @dev Computed from the ratio the range wants, not from a liquidity probe. Probing with
-    ///      quote-only amounts returns zero liquidity, because `getLiquidityForAmounts` takes the
-    ///      MINIMUM of the two single-sided answers and the missing leg pins it to zero.
-    ///      Evaluating a nominal liquidity and valuing both legs is scale-invariant and well
-    ///      behaved everywhere inside the range.
+    /// @dev Derived from the range's own ratio rather than a liquidity probe: probing with
+    ///      quote-only amounts returns zero, because `getLiquidityForAmounts` takes the minimum of
+    ///      the two single-sided answers and the missing leg pins it there. Evaluating a nominal
+    ///      liquidity and valuing both legs is scale-invariant and well behaved in range.
     function _quoteShareForRiskyLeg(
         uint256 quoteAmount,
         uint160 sqrtPriceX96,
