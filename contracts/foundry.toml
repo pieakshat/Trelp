@@ -9,14 +9,27 @@ remappings = [
     "ds-test/=lib/forge-std/lib/ds-test/src/",
     "solmate/=lib/solmate/",
     "@uniswap/v4-core/=lib/v4-core/",
-    "@openzeppelin/=lib/v4-core/lib/openzeppelin-contracts/",
-    "openzeppelin-contracts/=lib/v4-core/lib/openzeppelin-contracts/",
+    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "openzeppelin-contracts/=lib/openzeppelin-contracts/",
+    "@1inch/aqua/=lib/aqua/",
+    "@1inch/swap-vm/=lib/swap-vm/",
+    "@1inch/solidity-utils/=lib/solidity-utils/",
 ]
 libs = ["lib"]
 evm_version = "cancun"
 optimizer = true
 optimizer_runs = 200
 via_ir = false
+
+# SwapVM is a bytecode VM and overflows the stack without the IR pipeline. Scope that to its own
+# sources so the rest of the project keeps fast legacy-codegen builds.
+[[profile.default.additional_compiler_profiles]]
+name = "via-ir"
+via_ir = true
+
+[[profile.default.compilation_restrictions]]
+paths = "{lib/swap-vm/**,lib/aqua/**,src/aqua/**,test/AquaBuffer.t.sol,test/smoke/**}"
+via_ir = true
 
 [fmt]
 line_length = 110
