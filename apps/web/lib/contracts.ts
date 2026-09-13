@@ -65,3 +65,6 @@ export const positionVenueAbi = parseAbi([
   "function tickUpper() view returns (int24)",
   "function liquidity() view returns (uint128)",
 ]);
+
+// Test-token faucet. MockERC20 leaves mint open; a real quote asset will not have it.
+export const faucetAbi = parseAbi(["function mint(address to, uint256 amount)"]);

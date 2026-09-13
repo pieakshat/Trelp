@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { encodeFunctionData, formatEther } from "viem";
-import { erc20Abi, trancheVaultAbi } from "@/lib/contracts";
+import { erc20Abi, faucetAbi, trancheVaultAbi } from "@/lib/contracts";
 import { dateLabel } from "@/lib/local-data";
 import {
   claimableAssets,
@@ -24,6 +24,7 @@ import {
   VaultBoundary,
 } from "./protocol-ui";
 import { AssetMark, Badge } from "./ui";
+import { useVaultStore } from "@/stores/vault-store";
 import {
   type ConfirmedReceipt,
   useWallet,
@@ -31,6 +32,9 @@ import {
 } from "./wallet-provider";
 
 type Tranche = "senior" | "junior";
+
+const faucetEnabled = process.env.NEXT_PUBLIC_TRELP_FAUCET === "true";
+const FAUCET_AMOUNT = "10000";
 
 function transactionError(error: unknown) {
   if (
@@ -51,6 +55,7 @@ export function VaultDetail({
   initialTranche: Tranche;
 }) {
   const wallet = useWallet();
+  const refreshVault = useVaultStore((state) => state.refresh);
   const [tranche, setTranche] = useState<Tranche>(initialTranche);
   const [amount, setAmount] = useState("");
   const [accepted, setAccepted] = useState(false);
@@ -154,6 +159,40 @@ export function VaultDetail({
             setReceipt(confirmation);
             setAmount("");
             setAccepted(false);
+          } catch (failure) {
+            setError(transactionError(failure));
+          } finally {
+            setBusy(false);
+          }
+        }
+
+        async function mintTestTokens() {
+          setError("");
+          setStatus("");
+          setReceipt(null);
+          try {
+            if (!vault.account)
+              throw new Error("Connect your wallet before minting.");
+            const value = parseTokenAmount(
+              FAUCET_AMOUNT,
+              vault.quote.decimals,
+            );
+            setBusy(true);
+            setStatus(`Confirm the ${vault.quote.symbol} mint…`);
+            const hash = await wallet.sendTransaction({
+              chainId: vault.deployment.chainId,
+              to: vault.quote.address,
+              data: encodeFunctionData({
+                abi: faucetAbi,
+                functionName: "mint",
+                args: [vault.account.address, value],
+              }),
+            });
+            setStatus("Waiting for mint confirmation…");
+            const confirmation = await wallet.waitForReceipt(hash);
+            setStatus(`${FAUCET_AMOUNT} ${vault.quote.symbol} minted.`);
+            setReceipt(confirmation);
+            await refreshVault(vault.account.address);
           } catch (failure) {
             setError(transactionError(failure));
           } finally {
@@ -451,6 +490,15 @@ export function VaultDetail({
                           </div>
                           <div className="balanceLine">
                             <span>Approval is requested only when needed.</span>
+                            {faucetEnabled ? (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void mintTestTokens()}
+                              >
+                                Get test {vault.quote.symbol}
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               disabled={busy}

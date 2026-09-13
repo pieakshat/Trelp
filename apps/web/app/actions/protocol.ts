@@ -21,7 +21,10 @@ function clientAndConfig() {
   if (!config) return null;
   return {
     config,
-    client: createPublicClient({ transport: http(config.rpcUrl) }),
+    // The snapshot is ~30 reads; batching keeps a public RPC from rate limiting.
+    client: createPublicClient({
+      transport: http(config.rpcUrl, { batch: true }),
+    }),
   };
 }
 
