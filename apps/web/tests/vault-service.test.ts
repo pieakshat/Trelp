@@ -159,7 +159,18 @@ test("deployment configuration rejects partial or malformed chain data", () => {
         deploymentBlock: 123n,
       },
       rpcUrl: "https://rpc.example/",
+      logsRpcUrl: "https://rpc.example/",
     },
+  );
+  assert.equal(
+    parseVaultDeployment({
+      TRELP_CHAIN_ID: "11155111",
+      TRELP_VAULT_ADDRESS: address("b"),
+      TRELP_DEPLOYMENT_BLOCK: "123",
+      TRELP_RPC_URL: "https://rpc.example",
+      TRELP_LOGS_RPC_URL: "https://logs.example",
+    })?.logsRpcUrl,
+    "https://logs.example/",
   );
   assert.throws(() =>
     parseVaultDeployment({
