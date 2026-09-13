@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   description:
     "Trelp separates liquidity-provider returns into senior protection and junior upside.",
-  title: "Trelp — Liquidity, divided by risk",
+  title: "Trelp",
 };
 
 export default function RootLayout({
