@@ -1,152 +1,175 @@
 # Trelp
 
-Trelp splits one Uniswap v4 liquidity position into two tradeable claims. Senior takes a capped
-claim paid first. Junior takes the first loss and keeps everything left over.
+Trelp turns one Uniswap v4 liquidity position into two products. Senior is the safe side: it gets
+paid first and earns a capped return. Junior is the levered side: it takes the first loss and keeps
+whatever is left after senior is paid.
 
-One pool position, two risk profiles, one settlement.
+A curator runs the position. Depositors pick a side.
+
+Underneath, the position lives in a Uniswap v4 pool with a custom hook, and part of junior's
+capital works as a standing bid on 1inch Aqua without ever leaving the vault.
 
 ## The problem
 
-Providing liquidity gives you one undifferentiated payoff. You earn fees, you eat impermanent loss
-and adverse selection, and the net is uncertain. There is no way to buy only the steady part or
-only the levered part.
+Being an LP is a single, blended bet. You earn trading fees, you lose money when the pair moves
+against you, and you find out the net at the end. You cannot buy just the steady part or just the
+levered part.
 
-That pushes two groups out of the market. Capital that wants predictable yield will not accept a
-position that can be down 20% because the pair moved. Capital that wants leveraged exposure to
-fee income has to go borrow it somewhere else.
+So two kinds of capital stay out. Treasuries and funds that need predictable yield will not accept
+a position that can be down 20% because ETH moved. Traders who want leveraged exposure to fee
+income have to borrow it somewhere else and manage that separately.
 
-Both sides want the same position. They want different slices of it.
+Both want the same position. They want different slices of it.
 
 ## The solution
 
-### Payment order, not loss attribution
+### Two sides of one position
 
-At settlement the vault holds one number: the quote balance after the position is unwound. Senior
-is paid first up to its claim, junior takes the remainder.
+Deposit into senior and you are first in line at settlement. Your return is capped, and you are
+protected by junior's capital sitting underneath you.
 
-```
-seniorPayout = min(NAV, seniorClaim)
-juniorPayout = NAV - seniorPayout
-```
+Deposit into junior and you absorb losses before senior feels anything. In exchange you keep the
+entire upside above senior's capped claim, which means leveraged exposure to how the position
+performs.
 
-Nothing is transferred between tranches. Junior absorbs losses by being paid second.
+Both sides hold ERC-20 claim tokens, so a position can be sold before the epoch ends.
 
-This is why the protocol never computes impermanent loss. IL, fees, unwind cost, and adverse
-selection are already inside that single NAV. Attributing them per user would need path dependent
-accounting and a counterfactual price oracle, and would change nobody's payout.
+### Terms are set by who shows up
 
-### Terms derived from realised demand
+Senior's rate is not picked in advance. It is fixed at the moment the deposit period closes, based
+on how much of each side actually arrived.
 
-Senior's share of the upside is not configured. It is derived at activation from the subordination
-ratio that actually turned up:
+The more junior capital that shows up, the thicker senior's cushion, and the less senior needs to
+be paid for the risk. Thin junior means senior is closer to the loss and is priced accordingly.
 
-```
-j = J0 / (S0 + J0)          junior's share of capital
-s = lambda * (1 - 2j) / (1 - j)   senior's share of net gain
-```
+There is a hard limit built in. Past a certain point there is no rate that leaves both sides better
+off than simply LPing on their own, and the vault refuses to start rather than sell terms that do
+not work.
 
-Requiring junior to beat an unlevered LP at any fee yield makes the fee term cancel, so the bound
-holds regardless of how the epoch performs. It also returns zero at j >= 50%, so the point where
-tranching stops being worth doing is arithmetic rather than a hand-set guard.
+### A curator runs the position
 
-Senior's settled claim is `S0 + min(S0 * c, s * max(0, NAV - V0))`. The coupon is capped, and in a
-losing epoch it is zero.
+Someone has to decide where the liquidity sits. The curator picks the price range at the start and
+can move it as the market moves, which is the difference between a position that keeps earning fees
+and one that drifts out of range and stops.
 
-### One solvency signal, read by every venue
+Those powers are deliberately narrow. The curator never holds depositor funds, cannot change the
+terms once the epoch starts, cannot move the range more often than a cooldown allows, and is
+blocked from moving it at all once the position is under stress. Every range move has its cost
+measured and recorded, so the discretion shows up in the final numbers instead of hiding in them.
 
-```
-b = (NAV - seniorClaim) / seniorClaim
-```
+### The position defends itself
 
-Coverage is signed, so it can go negative. Both trading venues read it from the same vault and
-price off it. As coverage falls the spread widens, then the risk increasing side is refused
-outright. The position defends itself as it degrades instead of quoting the same way into a
-drawdown.
+Junior's capital is the first line of defence. The second is that the vault watches its own health
+continuously and both venues react to it.
 
-### A hook that can say no
+**In the Uniswap v4 pool**, a hook prices every swap off that health reading. As the cushion thins
+the pool's fee widens automatically. If it gets bad enough the hook refuses trades that would push
+more of the falling asset onto the vault, while still accepting trades that reduce risk. A normal
+pool has no way to say no, which is exactly how an LP ends up buying all the way down.
 
-A Uniswap v4 hook gates the pool to the vault's own position, overrides the LP fee from the
-coverage spread, and refuses swaps that would push more of the falling asset onto the vault.
+**On 1inch Aqua**, part of junior's capital works as a standing bid below the market. Aqua never
+takes custody, so that money is still sitting in the vault backing senior while it quotes. It picks
+up the asset at a discount in calm markets, widens as the cushion thins, and stops bidding
+entirely when things get bad. Anyone can revoke it outright once health crosses the threshold,
+turning it back into pure loss absorption.
 
-A dynamic fee is symmetric and cannot skew, so a directional refusal is the only way to keep
-quoting the side that reduces risk while declining the side that increases it.
+Both venues read the same number from the same contract. There is one view of risk, applied in two
+places.
 
-### A buffer that does not leave the vault
+### Junior is a cushion, not a guarantee
 
-Part of junior's capital is shipped to 1inch Aqua as a standing bid below spot. Aqua takes no
-custody, so the capital stays in the vault, still counted by `nav()`, still absorbing losses, while
-also being a live order. When coverage breaches the threshold anyone can call `callBuffer()` and
-revoke it, turning the cushion back into pure loss absorption.
+A big enough drawdown eats through junior and reaches senior. Running the full lifecycle against
+real mainnet prices:
 
-### Honest about the limit
-
-Junior is a cushion, not a guarantee. A large enough drawdown exhausts junior and reaches senior.
-Running the full lifecycle against mainnet state:
-
-| ETH | NAV | Coverage | Spread | Bidding |
+| ETH price | Vault value | Cushion | Pool fee | Still bidding |
 |---|---|---|---|---|
-| 2489 | 1,000,000 | 4285 bps | 30 bps | yes |
-| -10% | 954,797 | 3630 bps | 39 bps | yes |
-| -20% | 893,619 | 2757 bps | 51 bps | yes |
-| -32% | 794,467 | 1341 bps | 71 bps | yes |
-| -45% | 669,677 | -439 bps | 90 bps | no |
+| 2489 | 1,000,000 | 42.9% | 30 bps | yes |
+| down 10% | 954,797 | 36.3% | 39 bps | yes |
+| down 20% | 893,619 | 27.6% | 51 bps | yes |
+| down 32% | 794,467 | 13.4% | 71 bps | yes |
+| down 45% | 669,677 | gone | 90 bps | no |
 
-Settled at 671,439 against a senior claim of 700,000. Junior wiped, senior down 4.08%.
+Settled at 671,439 against a senior claim of 700,000. Junior lost everything, senior still finished
+down 4.08%. That is the honest shape of the product, and it is what the cushion is sized against.
 
 ## Lifecycle
 
-One deployment runs one epoch and terminates. Rolling is a new deployment, which removes all cross
-epoch accounting.
+One deployment runs one epoch and ends. Running it again is a new deployment, which keeps the
+accounting simple and means no epoch can inherit another one's problems.
 
 ```mermaid
 flowchart LR
-    S[Subscription] -->|activate| A[Active]
-    A -->|beginSettlement| U[Unwinding]
-    U -->|settle| D[Settled]
-    S -->|cancel| D
-
-    S -.- S1["deposits open<br/>claims mint 1:1<br/>capital idle"]
-    A -.- A1["position live<br/>buffer shipped<br/>coverage drives both venues"]
-    U -.- U1["position burned<br/>risky leg sold<br/>unwindCost recorded"]
-    D -.- D1["waterfall final<br/>redemptions open"]
+    A["1. Deposit period<br/>both sides open"]
+    B["2. Live position<br/>curator manages the range"]
+    C["3. Wind down<br/>back to cash"]
+    D["4. Claims paid<br/>senior first"]
+    A --> B --> C --> D
 ```
 
-There is no entry or exit during `Active`. The senior coupon is only quotable against a known `j`,
-and redeeming at NAV mid drawdown would let junior leave before absorbing the loss it exists to
-absorb. Claims are ERC-20, so the secondary market is the exit.
+### 1. Deposit period
 
-What happens at each transition:
+Both tranches are open. Anyone can deposit the quote asset, USDC in our deployment, and receive
+senior or junior claim tokens one for one. Nothing is deployed yet, so the split between the two
+sides is unambiguous.
+
+### 2. The position goes live
+
+When the deposit window closes, `activate()` does everything at once. It reads how much of each
+side arrived, fixes senior's terms from that, opens the Aqua bid with part of junior's capital, and
+puts the rest into the Uniswap v4 pool as a concentrated position.
+
+From here the position is live and earning. The curator can move the range as the market moves,
+subject to the limits above. The vault continuously recomputes its health, and the pool fee and the
+Aqua bid both track it.
+
+Deposits and withdrawals are closed during this phase. Senior's rate was quoted against a specific
+amount of junior capital, and letting junior walk out mid drawdown would remove the exact thing
+senior was paying for. Claim tokens are transferable, so selling is the exit.
+
+### 3. Wind down
+
+At the end of the epoch the Aqua bid is revoked, the v4 position is burned, and both assets come
+back to the vault. Whatever is still held in the volatile asset is sold back to the quote asset,
+floored against the oracle so a bad venue cannot be used to settle low.
+
+The cost of that conversion is recorded rather than absorbed silently.
+
+### 4. Claims are paid
+
+The vault takes its final cash balance and runs the waterfall once. Senior is paid up to its claim.
+Junior takes everything that remains, which can be zero. Both pools are frozen, and holders redeem
+their claim tokens for a proportional share.
 
 ```mermaid
 sequenceDiagram
-    participant U as Depositors
-    participant V as TrancheVault
-    participant P as V4PositionVenue
-    participant Q as Aqua
+    participant D as Depositors
+    participant C as Curator
+    participant V as Vault
+    participant P as Uniswap v4
+    participant Q as 1inch Aqua
 
-    U->>V: depositSenior / depositJunior
-    Note over V: capital idle, j unambiguous
+    D->>V: deposit into senior or junior
+    Note over V: claims minted 1:1, capital idle
 
-    U->>V: activate()
-    V->>V: derive j, then s
-    V->>Q: ship(buffer slice)
-    V->>P: deploy(rest)
-    Note over V,P: seeds the risky leg, mints the range
+    C->>V: activate()
+    V->>V: fix senior terms from actual demand
+    V->>Q: open the standing bid
+    V->>P: mint the position
 
-    loop while Active
-        P-->>V: valueInQuote()
-        V-->>V: coverageWad()
-        V-->>Q: riskQuote() widens the bid
-        V-->>P: riskQuote() widens the fee, halts one side
+    loop while live
+        C->>V: rebalance the range
+        V->>P: fee widens as the cushion thins
+        V->>Q: bid widens, then stops
+        C->>V: callBuffer() revokes the bid
     end
 
-    U->>V: beginSettlement()
-    V->>Q: dock()
-    V->>P: unwind()
-    U->>V: liquidate() then settle()
-    V->>V: waterfall, freeze pots
-    U->>V: redeemSenior / redeemJunior
+    C->>V: beginSettlement()
+    V->>Q: revoke
+    V->>P: burn the position
+    V->>V: sell back to cash, run the waterfall
+    D->>V: redeem claims
 ```
+
 
 ## Contract modules
 
@@ -206,6 +229,26 @@ flowchart TD
 | `SolvencyAdjuster` | Anchors that bid to the oracle and widens it with distress |
 | `UniswapV3TwapOracle` | The mark that coverage, the breaker and the floor all read |
 | `V3SpotSwapper` | Converts between the two assets at both ends of the epoch |
+
+### The accounting, precisely
+
+Everything the product quotes comes from four expressions in `SolvencyLib`.
+
+```
+j  = J0 / (S0 + J0)                          subordination, junior's share of capital
+s  = lambda * (1 - 2j) / (1 - j)             senior's share of net gain, derived from j
+b  = (NAV - seniorClaim) / seniorClaim       coverage, signed
+claim = S0 + min(S0 * c, s * max(0, NAV - V0))
+```
+
+The bound on `s` comes from requiring junior to beat an unlevered LP at any fee yield. The fee term
+cancels, which is why the bound holds regardless of how the epoch performs, and why it returns zero
+at `j >= 50%`. That is the hard limit the deposit period runs into, and it falls out of the algebra
+rather than being a separate guard.
+
+The settled claim is anchored on net profit and loss, not gross fee income. Earning spread while
+being adversely selected is not income, and splitting gross fees would overpay senior in exactly
+the epochs where junior is absorbing the loss.
 
 Three things hold this together.
 
