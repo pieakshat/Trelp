@@ -38,9 +38,11 @@ contract DeployTestnet is Script {
     int24 constant SPACING = 60;
     uint32 constant TWAP = 30 minutes;
 
-    uint256 constant S0 = 700_000e6;
-    uint256 constant J0 = 300_000e6;
     int24 constant START_TICK = 198_120;
+
+    /// @dev A seed only. Real deposits during the window move `j`, and the split follows.
+    uint256 s0;
+    uint256 j0;
 
     MockERC20 usdc;
     MockERC20 weth;
@@ -67,6 +69,8 @@ contract DeployTestnet is Script {
         uint256 ck = vm.envUint("CURATOR_PRIVATE_KEY");
         deployer = vm.addr(pk);
         curator = vm.addr(ck);
+        s0 = vm.envOr("SEED_SENIOR", uint256(100_000e6));
+        j0 = vm.envOr("SEED_JUNIOR", uint256(40_000e6));
 
         vm.startBroadcast(pk);
         _tokens();
@@ -75,16 +79,16 @@ contract DeployTestnet is Script {
         _poolAndHook();
         _venue();
         _buffer();
-        usdc.approve(address(vault), S0);
-        vault.depositSenior(S0);
+        usdc.approve(address(vault), s0);
+        vault.depositSenior(s0);
         vm.stopBroadcast();
 
         vm.startBroadcast(ck);
         vault.setVenues(
             IPositionVenue(address(venue)), IBufferStrategy(strategy), ISpotSwapper(address(swapper))
         );
-        usdc.approve(address(vault), J0);
-        vault.depositJunior(J0);
+        usdc.approve(address(vault), j0);
+        vault.depositJunior(j0);
         vm.stopBroadcast();
 
         _write();
@@ -93,8 +97,8 @@ contract DeployTestnet is Script {
     function _tokens() internal {
         usdc = new MockERC20("Trelp USD", "tUSDC", 6);
         weth = new MockERC20("Trelp Ether", "tWETH", 18);
-        usdc.mint(deployer, S0);
-        usdc.mint(curator, J0);
+        usdc.mint(deployer, s0);
+        usdc.mint(curator, j0);
     }
 
     function _pricing() internal {
@@ -208,8 +212,8 @@ contract DeployTestnet is Script {
                 bidCutoffWad: 0.9e18,
                 maxInventoryWad: 0.6e18
             }),
-            subscriptionEnd: uint64(block.timestamp + 10 minutes),
-            epochDuration: 2 hours,
+            subscriptionEnd: uint64(block.timestamp + vm.envOr("SUBSCRIPTION_SECONDS", uint256(3 hours))),
+            epochDuration: uint64(vm.envOr("EPOCH_SECONDS", uint256(2 hours))),
             activationGrace: 10 minutes,
             unwindWindow: 30 minutes,
             rebalanceCooldown: 5 minutes
