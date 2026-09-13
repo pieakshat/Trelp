@@ -90,25 +90,29 @@ export function Trend({
     </svg>
   );
 }
+// Test deployments prefix symbols, so tUSDC and tWETH resolve to the same marks as USDC and WETH.
+function tokenFile(symbol: string) {
+  return tokenFiles[symbol] ?? tokenFiles[symbol.replace(/^t(?=[A-Z])/, "")];
+}
+
 export function AssetMark({ asset }: { asset: string }) {
+  const tokens = asset.split(" / ");
+  const files = tokens.map(tokenFile);
+  // The mark is a fixed-width box built for overlapping coins. A symbol with no icon used to fall
+  // back to text, which overflowed that box and collided with the pair name beside it.
+  if (files.some((file) => !file)) return null;
   return (
     <span className="assetMark" aria-hidden="true">
-      {asset
-        .split(" / ")
-        .map((token, index) =>
-          tokenFiles[token] ? (
-            <Image
-              key={token}
-              className={index ? "assetSecondary" : undefined}
-              src={`/brand/tokens/${tokenFiles[token]}.svg`}
-              alt=""
-              width={34}
-              height={34}
-            />
-          ) : (
-            <span key={token}>{token}</span>
-          ),
-        )}
+      {files.map((file, index) => (
+        <Image
+          key={tokens[index]}
+          className={index ? "assetSecondary" : undefined}
+          src={`/brand/tokens/${file}.svg`}
+          alt=""
+          width={34}
+          height={34}
+        />
+      ))}
     </span>
   );
 }
