@@ -46,7 +46,23 @@ contract HookDeployer {
     }
 }
 
-/// @notice One epoch on a mainnet fork: real USDC and WETH, the real v4 PoolManager, real Aqua.
+/// @notice One complete epoch of a Trelp vault, start to finish, on a mainnet fork.
+///
+/// The whole point is to show the mechanism reacting to a falling market. A senior and a junior
+/// depositor fund the vault, capital goes into a real Uniswap v4 pool and a real Aqua bid, ETH
+/// falls 45%, and the vault widens its spreads, refuses trades, kills its own buffer, settles, and
+/// pays out. Every number printed is read back from the contracts.
+///
+/// Steps:
+///   1. Deploy the stack against the real mainnet PoolManager and a real Aqua registry
+///   2. Two depositors fund senior and junior
+///   3. activate() fixes senior's terms and puts capital to work
+///   4. ETH falls in four steps; coverage, spread and the pool all react
+///   5. The curator moves the range once, while the rules still allow it
+///   6. The buffer is called once coverage breaks
+///   7. The position is unwound, converted to cash, and settled
+///   8. Both depositors redeem what they are owed
+///
 /// @dev The starting price is read from the live USDC/WETH v3 pool. The fall after that is
 ///      simulated rather than traded through v3, which would cross thousands of real ticks.
 ///      Simulation only; run against a fork RPC without --broadcast.
@@ -88,20 +104,36 @@ contract Demo is Script, StdCheats {
     int24 center;
 
     function run() external {
+        // Stand up every contract and wire them together.
         _deploy();
+
+        // Senior and junior put money in. Claims mint one for one, nothing is deployed yet.
         _subscribe();
 
+        // The deposit window closes. This one call reads how much of each side showed up, fixes
+        // senior's terms from that, opens the Aqua bid, and mints the v4 position.
         vm.warp(subEnd);
         vault.activate();
         _row("activated");
 
+        // ETH falls. At each step the mark moves, the pool follows, and the vault reprices.
         _fall(1054, "eth -10%");
+
+        // Still healthy enough that the curator is allowed to move the range.
+        _rebalance();
+
         _fall(2231, "eth -20%");
         _fall(3857, "eth -32%");
         _fall(5978, "eth -45%");
 
+        // Coverage is gone, so the standing bid is revoked.
         _callBufferIfBreached();
+
+        // Burn the position, sell what is left, run the waterfall.
         _settleAndReport();
+
+        // Senior is paid first, junior takes whatever remains.
+        _redeem();
     }
 
     function _deploy() internal {
@@ -177,6 +209,7 @@ contract Demo is Script, StdCheats {
         console2.log("");
     }
 
+    /// @dev Deposits are one for one while capital sits idle, which is what makes `j` unambiguous.
     function _subscribe() internal {
         deal(USDC, alice, S0);
         deal(USDC, bob, J0);
@@ -190,6 +223,7 @@ contract Demo is Script, StdCheats {
         vm.stopPrank();
     }
 
+    /// @notice One leg down: move the mark, let time pass, then drag the pool to match.
     /// @dev ETH cheaper means more WETH-wei per USDC-unit, so the tick rises.
     function _fall(int24 delta, string memory label) internal {
         int24 target = center + delta;
@@ -218,6 +252,7 @@ contract Demo is Script, StdCheats {
         vm.stopPrank();
     }
 
+    /// @dev Permissionless once coverage breaches. Revoking the bid stops the vault buying more.
     function _callBufferIfBreached() internal {
         if (!vault.bufferShipped()) return;
         if (vault.coverageWad() >= 0.1e18) return;
@@ -227,6 +262,7 @@ contract Demo is Script, StdCheats {
         _row("buffer called");
     }
 
+    /// @dev Dock the bid, burn the position, sell the leftover risky leg, freeze the two pots.
     function _settleAndReport() internal {
         (,,,, uint64 start,) = vault.terms();
         vm.warp(uint256(start) + T + 1);
@@ -246,6 +282,43 @@ contract Demo is Script, StdCheats {
         console2.log("junior return bps ", _retBps(vault.juniorPot(), J0));
     }
 
+    /// @dev Re-centres the range on the new price. The vault blocks this below a coverage floor
+    ///      and rate limits it, so it can legitimately fail; report that rather than crash.
+    function _rebalance() internal {
+        (, int24 tick,,) = manager.getSlot0(key.toId());
+        int24 mid = (tick / SPACING) * SPACING;
+        bytes memory data = abi.encode(mid - 3000, mid + 4320);
+
+        vm.prank(curator);
+        try vault.rebalance(data) {
+            console2.log("curator moved the range");
+            console2.log("  cost usdc    ", vault.rebalanceCost() / 1e6);
+            console2.log("  moves        ", vault.rebalanceCount());
+        } catch {
+            console2.log("curator range move refused");
+        }
+    }
+
+    /// @dev Claims are burned for a share of the frozen pot. This is the only place money leaves.
+    function _redeem() internal {
+        uint256 seniorShares = ERC20(address(vault.senior())).balanceOf(alice);
+        uint256 juniorShares = ERC20(address(vault.junior())).balanceOf(bob);
+
+        vm.prank(alice);
+        uint256 seniorOut = vault.redeemSenior(seniorShares);
+        vm.prank(bob);
+        uint256 juniorOut = vault.redeemJunior(juniorShares);
+
+        console2.log("");
+        console2.log("=== redeemed ===");
+        console2.log("senior put in usdc", S0 / 1e6);
+        console2.log("senior got out    ", seniorOut / 1e6);
+        console2.log("junior put in usdc", J0 / 1e6);
+        console2.log("junior got out    ", juniorOut / 1e6);
+        console2.log("vault dust left   ", quote.balanceOf(address(vault)) / 1e6);
+    }
+
+    /// @dev One line of vault state, read straight back from the contracts.
     function _row(string memory label) internal view {
         RiskPolicy.Quote memory q = vault.riskQuote();
         (, int24 v4t,,) = manager.getSlot0(key.toId());

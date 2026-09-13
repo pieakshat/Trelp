@@ -79,18 +79,21 @@ places.
 ### Junior is a cushion, not a guarantee
 
 A big enough drawdown eats through junior and reaches senior. Running the full lifecycle against
-real mainnet prices:
+real mainnet prices, with the curator re-centring the range once after the first leg down:
 
 | ETH price | Vault value | Cushion | Pool fee | Still bidding |
 |---|---|---|---|---|
 | 2489 | 1,000,000 | 42.9% | 30 bps | yes |
 | down 10% | 954,797 | 36.3% | 39 bps | yes |
-| down 20% | 893,619 | 27.6% | 51 bps | yes |
-| down 32% | 794,467 | 13.4% | 71 bps | yes |
-| down 45% | 669,677 | gone | 90 bps | no |
+| down 20% | 895,917 | 27.9% | 50 bps | yes |
+| down 32% | 804,537 | 14.9% | 69 bps | yes |
+| down 45% | 691,983 | gone | 90 bps | no |
 
-Settled at 671,439 against a senior claim of 700,000. Junior lost everything, senior still finished
-down 4.08%. That is the honest shape of the product, and it is what the cushion is sized against.
+Settled at 693,103 against a senior claim of 700,000. Junior lost everything, senior finished down
+0.98%. A 45% move in the pair cost the protected side one percent, and cost the levered side
+everything. That is the shape of the product.
+
+Reproduce it with `forge script script/Demo.s.sol:Demo --rpc-url <mainnet rpc>`.
 
 ## Lifecycle
 
