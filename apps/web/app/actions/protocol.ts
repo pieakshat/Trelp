@@ -16,6 +16,20 @@ const stateInput = z.object({
     .optional(),
 });
 
+// viem errors carry the endpoint URL and the whole request body, and the URL can hold an API key.
+// Never let one reach the browser.
+function safeMessage(error: unknown, fallback: string) {
+  const raw =
+    typeof error === "object" && error && "shortMessage" in error
+      ? String((error as { shortMessage: unknown }).shortMessage)
+      : error instanceof Error
+        ? error.message
+        : "";
+  const first = raw.split("\n")[0]?.trim();
+  if (!first) return fallback;
+  return first.replace(/https?:\/\/\S+/g, "the RPC endpoint").slice(0, 200);
+}
+
 function clientAndConfig() {
   const config = getVaultRuntimeConfig();
   if (!config) return null;
@@ -25,6 +39,7 @@ function clientAndConfig() {
     client: createPublicClient({
       transport: http(config.rpcUrl, { batch: true }),
     }),
+    logsClient: createPublicClient({ transport: http(config.logsRpcUrl) }),
   };
 }
 
@@ -71,10 +86,7 @@ export async function getVaultState(input: unknown = {}) {
     return {
       ok: false as const,
       code: "read_failed" as const,
-      error:
-        error instanceof Error
-          ? `Live vault data is unavailable: ${error.message}`
-          : "Live vault data is unavailable.",
+      error: safeMessage(error, "Live vault data is unavailable."),
     };
   }
 }
@@ -97,7 +109,7 @@ export async function getVaultEvents() {
         error: "Add the deployed vault and RPC settings to load activity.",
       };
     await assertConfiguredChain(runtime);
-    const logs = (await runtime.client.getContractEvents({
+    const logs = (await runtime.logsClient.getContractEvents({
       address: runtime.config.deployment.address,
       abi: trancheVaultAbi,
       fromBlock: runtime.config.deployment.deploymentBlock,
@@ -131,10 +143,7 @@ export async function getVaultEvents() {
     return {
       ok: false as const,
       code: "read_failed" as const,
-      error:
-        error instanceof Error
-          ? `Vault activity is unavailable: ${error.message}`
-          : "Vault activity is unavailable.",
+      error: safeMessage(error, "Vault activity is unavailable."),
     };
   }
 }

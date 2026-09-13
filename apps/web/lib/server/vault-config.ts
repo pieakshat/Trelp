@@ -7,6 +7,7 @@ const deploymentSchema = z.object({
   TRELP_DEPLOYMENT_BLOCK: z.coerce.bigint().nonnegative(),
   TRELP_RPC_URL: z.url(),
   TRELP_VAULT_ID: z.string().trim().min(1).max(80).optional(),
+  TRELP_LOGS_RPC_URL: z.url().optional(),
 });
 
 export function parseVaultDeployment(env: Record<string, string | undefined>) {
@@ -26,6 +27,10 @@ export function parseVaultDeployment(env: Record<string, string | undefined>) {
       deploymentBlock: parsed.TRELP_DEPLOYMENT_BLOCK,
     },
     rpcUrl: new URL(parsed.TRELP_RPC_URL).toString(),
+    // Some providers cap eth_getLogs to a narrow block range while serving eth_call fine.
+    logsRpcUrl: new URL(
+      parsed.TRELP_LOGS_RPC_URL ?? parsed.TRELP_RPC_URL,
+    ).toString(),
   };
 }
 
