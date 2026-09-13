@@ -29,7 +29,20 @@ export const useVaultStore = create<VaultState>((set) => ({
       error: "",
       snapshot: state.snapshot,
     }));
-    const result = await getVaultState(account ? { account } : {});
+    let result: Awaited<ReturnType<typeof getVaultState>>;
+    try {
+      result = await getVaultState(account ? { account } : {});
+    } catch (failure) {
+      if (current !== request) return;
+      set({
+        status: "error",
+        error:
+          failure instanceof Error
+            ? failure.message
+            : "Vault data is unavailable.",
+      });
+      return;
+    }
     if (current !== request) return;
     if (result.ok) {
       set({ snapshot: result.snapshot, status: "ready", error: "" });

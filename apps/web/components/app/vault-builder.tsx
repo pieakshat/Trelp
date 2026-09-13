@@ -8,8 +8,8 @@ import {
   curatorCapabilities,
   formatWadPercent,
   phaseNames,
+  rebalanceTicks,
 } from "@/lib/vault-domain";
-import { useVaultStore } from "@/stores/vault-store";
 import { AddressLink, TransactionLink, VaultBoundary } from "./protocol-ui";
 import { AssetMark, Badge, PageHeading } from "./ui";
 import {
@@ -17,9 +17,6 @@ import {
   useWallet,
   WalletButton,
 } from "./wallet-provider";
-
-const int24Min = -8_388_608;
-const int24Max = 8_388_607;
 
 function transactionError(error: unknown) {
   if (
@@ -34,7 +31,6 @@ function transactionError(error: unknown) {
 
 export function VaultBuilder() {
   const wallet = useWallet();
-  const refresh = useVaultStore((state) => state.refresh);
   const [lower, setLower] = useState("-120");
   const [upper, setUpper] = useState("120");
   const [busy, setBusy] = useState(false);
@@ -59,14 +55,7 @@ export function VaultBuilder() {
           rebalanceCooldown: vault.config.rebalanceCooldown,
           blockTimestamp: vault.blockTimestamp,
         });
-        const parsedLower = Number(lower);
-        const parsedUpper = Number(upper);
-        const validRange =
-          Number.isInteger(parsedLower) &&
-          Number.isInteger(parsedUpper) &&
-          parsedLower >= int24Min &&
-          parsedUpper <= int24Max &&
-          parsedLower < parsedUpper;
+        const ticks = rebalanceTicks(lower, upper);
 
         async function submit(
           action: "callBuffer" | "rebalance",
@@ -88,7 +77,6 @@ export function VaultBuilder() {
             const confirmation = await wallet.waitForReceipt(hash);
             setReceipt(confirmation);
             setStatus("Transaction confirmed on-chain.");
-            await refresh(vault.account?.address);
           } catch (failure) {
             setError(transactionError(failure));
             setStatus("");
@@ -185,7 +173,7 @@ export function VaultBuilder() {
                     />
                   </label>
                 </div>
-                {!validRange ? (
+                {!ticks ? (
                   <p className="uiError">
                     Use valid ticks with lower below upper.
                   </p>
@@ -193,8 +181,9 @@ export function VaultBuilder() {
                 <button
                   className="uiButton fullWidth sectionGap"
                   type="button"
-                  disabled={busy || !capabilities.canRebalance || !validRange}
-                  onClick={() =>
+                  disabled={busy || !capabilities.canRebalance || !ticks}
+                  onClick={() => {
+                    if (!ticks) return;
                     void submit(
                       "rebalance",
                       encodeFunctionData({
@@ -203,12 +192,12 @@ export function VaultBuilder() {
                         args: [
                           encodeAbiParameters(
                             [{ type: "int24" }, { type: "int24" }],
-                            [parsedLower, parsedUpper],
+                            ticks,
                           ),
                         ],
                       }),
-                    )
-                  }
+                    );
+                  }}
                 >
                   Rebalance range
                 </button>

@@ -8,8 +8,9 @@ export default function ApplicationLayout({
 }: {
   children: ReactNode;
 }) {
+  const chainId = Number(process.env.TRELP_CHAIN_ID);
   return (
-    <WalletProvider>
+    <WalletProvider chainId={chainId}>
       <VaultDataProvider>
         <AppShell>{children}</AppShell>
       </VaultDataProvider>

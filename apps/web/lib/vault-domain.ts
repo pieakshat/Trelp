@@ -45,6 +45,22 @@ export function curatorCapabilities(input: {
   };
 }
 
+export function rebalanceTicks(
+  lowerInput: string,
+  upperInput: string,
+): [number, number] | null {
+  if (!/^-?\d+$/.test(lowerInput) || !/^-?\d+$/.test(upperInput)) return null;
+  const lower = Number(lowerInput);
+  const upper = Number(upperInput);
+  return Number.isInteger(lower) &&
+    Number.isInteger(upper) &&
+    lower >= -887_272 &&
+    upper <= 887_272 &&
+    lower < upper
+    ? [lower, upper]
+    : null;
+}
+
 export function parseTokenAmount(value: string, decimals: number) {
   const amount = value.trim();
   if (!/^\d+(\.\d+)?$/.test(amount))

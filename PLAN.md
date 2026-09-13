@@ -1,35 +1,31 @@
-# UI refresh and dashboard enhancement
+# Privy wallet and live contract wiring
 
 ## Objective
-Refresh the complete Trelp interface, integrate real brand SVG assets, add a useful dashboard and downloadable PDF/DOCX factsheets, and improve actual wallet connection and balance display. Keep the existing financial simulation intact until live contracts/backend exist.
 
-## Research
-Existing Next.js app has six connected pages, real EIP-6963/EIP-1193 wallet connection and SIWE Server Actions, persisted demo data, and no document templates. Preserve working routes and operations. Keep Trelp’s existing mark and burgundy identity; replace generic token drawings with sourced logos.
+Use Privy for the real connected wallet, keep every deployment value in environment configuration, refresh account-dependent contract reads after confirmed writes, and expose only ABI-authorized depositor and curator operations.
 
-## Proposal / approval
-The user explicitly authorized the entire refresh and requested an implemented dashboard and real wallet connection. Use a charcoal sidebar, warm white surfaces, burgundy accents, clearer typography, restrained SVG artwork, and consistent responsive controls. Root owns checkout edits; asset research and document creation are staged in temporary directories by subagents.
+## Current state
 
-## Execution
-- [x] Refresh shared UI and landing page; integrate Trelp SVG, sourced token/network logos and favicon.
-- [x] Add /dashboard with derived allocation, positions, recent activity, real wallet card and linked resources.
-- [x] Extend real wallet UI with safe provider icons, address copy/explorer links, actual native balance and error states.
-- [x] Integrate rendered and verified factsheet PDF and editable DOCX, linked through a resources page.
+- Contract reads come from the configured RPC, vault address, and deployment block.
+- Deposits approve the quote token only when needed; redemptions unlock after settlement.
+- Curator controls expose only `rebalance(bytes)` and `callBuffer()`, gated by wallet role and live vault state.
+- Privy replaces the hardcoded Anvil account and the custom SIWE session.
 
-## Verification
-- [x] Core domain/auth tests and browser journeys, including live-wallet balance changes and dashboard navigation.
-- [x] Biome, TypeScript and production build.
-- [x] Desktop/mobile visual checks, SVG and document link checks.
-- [x] One independent read-only review of this refresh; resolve concrete findings and inspect final diff.
+## Decisions
 
-## Limits
-No private keys, live deposit transactions, external publishing or production data writes. Wallet RPC balances and sign-in are real; sample portfolio values remain explicitly separate. The existing single-process session store needs shared storage before a multi-instance launch. No claim of flawless compatibility with untested wallet extensions.
+- `NEXT_PUBLIC_PRIVY_APP_ID` is partner-supplied public configuration; missing it keeps the app read-only.
+- External wallet writes use the EIP-1193 provider returned by Privy's connected wallet so the contract sees the actual authorized address.
+- The deployment chain is the only supported transaction chain for a configured instance.
+- Wallet balances, allowance, claims, and vault state refresh after each confirmed receipt.
+
+## Checks
+
+- [x] Unit tests cover read state, phase/role gates, approvals, receipts, chain configuration, and Uniswap tick bounds.
+- [x] Browser journeys cover live contract pages, mobile layout, missing Privy configuration, and locked writes.
+- [x] TypeScript, Biome, and the production build pass.
+- [x] Independent ABI, env, and wallet-boundary reviews; all concrete findings resolved.
+- [x] 20 unit tests, 13 browser journeys, TypeScript, app-scoped Biome, and the production build pass.
 
 ## Next step
-Complete. Open http://localhost:3000/dashboard. All changes are local and ready for integration; no external deployment was performed.
 
-## Final evidence
-- 3 domain/auth tests pass; 4 complete browser journeys pass against the production server, including real signature verification with an ephemeral EOA, RPC balance errors/retry, hiding balances, explicit network changes without provider events, account-change logout and session invalidation retry.
-- Biome, TypeScript and Next.js production build pass. The standard start command is available.
-- Desktop and 320/390px mobile views checked. Both pages of the DOCX and matching exported PDF visually reviewed. All 9 public SVGs parse and contain no executable or external resource references; factsheet/download routes return successfully.
-- One independent GPT-5.5 review completed. Accepted its single finding: explicit network switching relied on chainChanged to revoke the old SIWE session. Switching now invalidates in-flight session refresh and directly revokes after the confirmed chain change. Regression failed before the fix and passes afterward. No findings rejected.
-- Root also corrected native-balance privacy to respect Hide balances and verified the final diff. A personal wallet extension/hardware wallet was not available for manual signing; connector tests use an EIP-1193 provider and real ephemeral signatures.
+Add the partner-supplied Privy App ID, restart the web app, and perform one interactive transaction with the intended external wallet.

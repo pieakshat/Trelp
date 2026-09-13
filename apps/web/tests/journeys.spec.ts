@@ -85,7 +85,7 @@ test("resources contain vault documentation instead of brand downloads", async (
   await expect(page.locator("main")).not.toContainText("SVG");
 });
 
-test("mobile navigation, devnet wallet, resources, and unknown routes remain usable", async ({
+test("mobile navigation, Privy configuration, resources, and unknown routes remain usable", async ({
   page,
   request,
 }) => {
@@ -101,8 +101,13 @@ test("mobile navigation, devnet wallet, resources, and unknown routes remain usa
   await expect(
     page.getByRole("heading", { name: "Protocol lifecycle" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Manage wallet connection" }).click();
-  await expect(page.getByText("Anvil test wallet")).toBeVisible();
+  await page
+    .getByRole("banner")
+    .getByRole("button", { name: "Connect wallet" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Privy configuration required" }),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Open navigation" }).click();
   await page.getByRole("link", { name: "Resources", exact: true }).click();
@@ -219,61 +224,6 @@ test("vault route is neutral, compact, and keeps the live 70/30 split", async ({
     );
 });
 
-test("deposit amount uses one focus ring around the complete control", async ({
-  page,
-}) => {
-  await page.goto("/vaults/eth-usdc");
-  const amount = page.getByLabel("Deposit amount");
-  await amount.click();
-  await expect(amount).toHaveCSS("outline-style", "none");
-  await expect(page.locator(".depositInput")).not.toHaveCSS(
-    "box-shadow",
-    "none",
-  );
-});
-
-test("deposit amount rejects non-numeric text", async ({ page }) => {
-  await page.goto("/vaults/eth-usdc");
-  const amount = page.getByLabel("Deposit amount");
-  await amount.fill("abc");
-  await expect(amount).toHaveValue("");
-  await amount.fill("12.5");
-  await expect(amount).toHaveValue("12.5");
-});
-
-test("deposit card owns the Senior and Junior selector", async ({ page }) => {
-  await page.goto("/vaults/eth-usdc");
-  const deposit = page.locator(".depositPanel");
-  const selector = deposit.getByRole("group", { name: "Select tranche" });
-  await expect(selector).toBeVisible();
-  await selector.getByRole("button", { name: "Junior · first loss" }).click();
-  await expect(deposit).toContainText("Your junior claims");
-  await expect(
-    deposit.getByRole("button", { name: "Deposit into junior" }),
-  ).toBeVisible();
-});
-
-test("app chrome and primary actions share one burgundy", async ({ page }) => {
-  await page.goto("/vaults/eth-usdc");
-  const colors = await page
-    .locator(".appSidebar, .appTopbar, .vaultHero, .depositPanel .uiButton")
-    .evaluateAll((elements) =>
-      elements.map((element) => getComputedStyle(element).backgroundColor),
-    );
-  expect(new Set(colors)).toEqual(new Set(["rgb(158, 28, 41)"]));
-});
-
-test("deposit stays disabled until the risk notice is accepted", async ({
-  page,
-}) => {
-  await page.goto("/vaults/eth-usdc");
-  await page.getByLabel("Deposit amount").fill("1");
-  const deposit = page.getByRole("button", { name: "Deposit into senior" });
-  await expect(deposit).toBeDisabled();
-  await page.getByLabel(/I understand that both tranches/).check();
-  await expect(deposit).toBeEnabled();
-});
-
 test("sidebar destinations use readable type and subtle separators", async ({
   page,
 }) => {
@@ -298,7 +248,7 @@ test("sidebar destinations use readable type and subtle separators", async ({
   );
 });
 
-test("workspace pages show the live market identity and wallet context", async ({
+test("workspace pages show the live market identity without a hardcoded wallet", async ({
   page,
 }) => {
   for (const path of ["/portfolio", "/activity", "/transparency", "/create"]) {
@@ -316,33 +266,9 @@ test("workspace pages show the live market identity and wallet context", async (
     await page.locator(".dataTable .trancheMark").count(),
   ).toBeGreaterThanOrEqual(2);
   await page.goto("/portfolio");
-  await expect(page.locator("main")).toContainText("0x7099…79C8");
+  await expect(page.locator("main")).not.toContainText("0x7099…79C8");
   await page.goto("/settings");
-  await expect(page.locator("main")).toContainText("0x7099…79C8");
-});
-
-test("portfolio and activity values carry their token identity", async ({
-  page,
-}) => {
-  await page.goto("/portfolio");
-  await expect(
-    page.locator(".metricRibbon .tokenAmount img").first(),
-  ).toBeVisible();
-  await expect(
-    page.locator(".dataTable .tokenAmount img").first(),
-  ).toBeVisible();
-  await page.goto("/activity");
-  await expect(
-    page.locator(".dataTable .tokenAmount img").first(),
-  ).toBeVisible();
-});
-
-test("workspace token values use compact notation from one thousand", async ({
-  page,
-}) => {
-  await page.goto("/portfolio");
-  await expect(page.locator("main")).toContainText("5K USDC");
-  await expect(page.locator("main")).not.toContainText("5,000.06");
+  await expect(page.locator("main")).not.toContainText("0x7099…79C8");
 });
 
 test("returns stay explicitly pending before contract terms exist", async ({
@@ -357,16 +283,24 @@ test("returns stay explicitly pending before contract terms exist", async ({
   );
 });
 
-test("a confirmed deposit shows its on-chain receipt", async ({ page }) => {
+test("vault writes require a Privy wallet instead of a hardcoded account", async ({
+  page,
+}) => {
   await page.goto("/vaults/eth-usdc");
-  await page.getByLabel("Deposit amount").fill("0.01");
-  await page.getByLabel(/I understand that both tranches/).check();
-  await page.getByRole("button", { name: "Deposit into senior" }).click();
-  const receipt = page.locator(".transactionReceipt");
-  await expect(receipt).toContainText("Deposit confirmed on-chain");
-  await expect(receipt).toContainText("Block");
-  await expect(receipt).toContainText("Gas used");
-  await expect(receipt.locator("code")).toHaveText(
-    /^0x[0-9a-f]{4}…[0-9a-f]{4}$/i,
-  );
+  await expect(page.getByText("Wallet required")).toBeVisible();
+  await expect(page.getByLabel("Deposit amount")).toHaveCount(0);
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "Connect wallet" })
+    .click();
+  await expect(
+    page.getByText("Add NEXT_PUBLIC_PRIVY_APP_ID to enable transactions."),
+  ).toBeVisible();
+  await page.goto("/create");
+  await expect(
+    page.getByRole("button", { name: "Rebalance range" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Call buffer" }),
+  ).toBeDisabled();
 });

@@ -9,6 +9,7 @@ import {
   formatWadPercent,
   parseTokenAmount,
   phaseCapabilities,
+  rebalanceTicks,
   tranchePools,
 } from "../lib/vault-domain";
 
@@ -43,6 +44,18 @@ test("curator writes stay locked until role and active-vault conditions match", 
     }).canRebalance,
     false,
   );
+});
+
+test("rebalance ticks stay inside the Uniswap range", () => {
+  assert.deepEqual(rebalanceTicks("-887272", "887272"), [-887272, 887272]);
+  for (const range of [
+    ["", "120"],
+    ["-120", ""],
+    ["-887273", "120"],
+    ["-120", "887273"],
+    ["120", "120"],
+  ] as const)
+    assert.equal(rebalanceTicks(range[0], range[1]), null);
 });
 
 test("dashboard token amounts use compact readable units", () => {

@@ -7,14 +7,16 @@ The product UI reads one deployed `TrancheVault`, its Senior and Junior claim to
 Copy the values in `.env.example` into `.env.local`:
 
 ```sh
+NEXT_PUBLIC_PRIVY_APP_ID=your-privy-app-id
+# NEXT_PUBLIC_PRIVY_CLIENT_ID=your-optional-privy-client-id
 TRELP_CHAIN_ID=31337
 TRELP_VAULT_ADDRESS=0x...
-TRELP_DEPLOYMENT_BLOCK=0
+TRELP_DEPLOYMENT_BLOCK=the-vault-creation-block
 TRELP_RPC_URL=http://127.0.0.1:8545
 TRELP_VAULT_ID=eth-usdc
 ```
 
-The configured RPC chain ID is checked before any data is shown. Missing configuration produces an explicit setup state rather than sample financial data.
+The configured RPC chain ID is checked before any data is shown. Missing contract configuration produces an explicit setup state rather than sample financial data. `NEXT_PUBLIC_PRIVY_APP_ID` is public client configuration: when it is missing, reads remain available and transaction controls show a setup prompt.
 
 ## Run
 
@@ -25,6 +27,6 @@ corepack pnpm --filter @trelp/web typecheck
 corepack pnpm --filter @trelp/web test:e2e
 ```
 
-Wallet connection supports EIP-6963/EIP-1193 providers. Ethereum, Base, and Sepolia are supported; Anvil chain `31337` is accepted only by the authentication service outside production. Sign-In with Ethereum creates an HTTP-only, in-memory session. A server restart clears sessions.
+Privy owns wallet connection. Contract writes use the selected Privy wallet on the configured deployment chain; no wallet address or private key is hardcoded. Ethereum, Base, Sepolia, and local Anvil chain `31337` are supported.
 
 The transparency page at `/transparency` reads live NAV, tranche pools, coverage, position range, liquidity, costs, addresses, and the payment waterfall. Activity is reconstructed from vault logs starting at `TRELP_DEPLOYMENT_BLOCK`.

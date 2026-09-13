@@ -22,7 +22,7 @@ export default function SettingsPage() {
   const setPreferences = useAppStore((state) => state.setPreferences);
   const wallet = useWallet();
   const [message, setMessage] = useState("");
-  const address = wallet.connectedAddress ?? wallet.session?.address ?? null;
+  const address = wallet.connectedAddress;
   const update = (next: Partial<typeof preferences>) => {
     setPreferences({ ...preferences, ...next });
     setMessage("Preferences saved in this browser.");
@@ -118,11 +118,7 @@ export default function SettingsPage() {
               </div>
               <div>
                 <dt>Network</dt>
-                <dd>
-                  {networkName(
-                    wallet.chainId ?? wallet.session?.chainId ?? null,
-                  )}
-                </dd>
+                <dd>{networkName(wallet.chainId)}</dd>
               </div>
               <div>
                 <dt>Native balance</dt>

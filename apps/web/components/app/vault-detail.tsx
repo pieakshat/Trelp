@@ -16,7 +16,6 @@ import {
   phaseNames,
   tranchePools,
 } from "@/lib/vault-domain";
-import { useVaultStore } from "@/stores/vault-store";
 import {
   AddressLink,
   chainName,
@@ -52,7 +51,6 @@ export function VaultDetail({
   initialTranche: Tranche;
 }) {
   const wallet = useWallet();
-  const refresh = useVaultStore((state) => state.refresh);
   const [tranche, setTranche] = useState<Tranche>(initialTranche);
   const [amount, setAmount] = useState("");
   const [accepted, setAccepted] = useState(false);
@@ -156,7 +154,6 @@ export function VaultDetail({
             setReceipt(confirmation);
             setAmount("");
             setAccepted(false);
-            await refresh(vault.account.address);
           } catch (failure) {
             setError(transactionError(failure));
           } finally {
@@ -187,7 +184,6 @@ export function VaultDetail({
             const confirmation = await wallet.waitForReceipt(hash);
             setStatus("Redemption confirmed on-chain.");
             setReceipt(confirmation);
-            await refresh(vault.account.address);
           } catch (failure) {
             setError(transactionError(failure));
           } finally {
