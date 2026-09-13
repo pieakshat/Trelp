@@ -46,6 +46,9 @@ contract MockPositionVenue is IPositionVenue {
     uint256 internal _value;
     uint256 internal _rebalanceLoss;
     uint256 public rebalanceCalls;
+    int24 public tickLower = -120;
+    int24 public tickUpper = 120;
+    uint128 public liquidity = 1_000_000;
 
     constructor(MockERC20 quote_, address vault_) {
         quote = quote_;

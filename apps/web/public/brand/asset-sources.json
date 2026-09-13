@@ -1,0 +1,58 @@
+{
+  "retrieved_at": "2026-09-08",
+  "assets": {
+    "ethereum": {
+      "file": "ethereum.svg",
+      "variant": "Ethereum diamond, purple",
+      "source_url": "https://ethereum.org/images/assets/svgs/eth-diamond-purple.svg",
+      "authority_url": "https://ethereum.org/assets",
+      "license_or_usage": "Ethereum.org terms say non-code content is CC BY 4.0 unless marked otherwise; Ethereum/Foundation marks remain trademarks, so follow the official terms and brand guidance.",
+      "sha256": "7320e64e211db747308cc3e546e5360d42f3790b7a14fba0504573790e17f124"
+    },
+    "usdc": {
+      "file": "usdc.svg",
+      "variant": "USDC Token Logo",
+      "source_url": "https://6778953.fs1.hubspotusercontent-na1.net/hubfs/6778953/Pressroom/brandkit/logo-downloads/usdc.zip (Token Logo/USDC Token.svg)",
+      "authority_url": "https://www.circle.com/pressroom",
+      "license_or_usage": "Circle's pressroom provides this as an approved USDC brand asset and asks users to use approved logos as provided; follow Circle's brand use policy.",
+      "sha256": "fe4f9d5f34ef4ebeb5d80e1f5ff63dcaf5a0d5495f4adf206e4c3011d1f5c57d"
+    },
+    "wbtc": {
+      "file": "wbtc.svg",
+      "variant": "WBTC logomark, black",
+      "source_url": "https://wbtc.network/brandkit/logo2-black.svg",
+      "authority_url": "https://wbtc.network/brandKit",
+      "license_or_usage": "WBTC's brand kit says not to edit, change, distort, recolor, crop, or reconfigure the supplied logo; this file is unchanged from the official download.",
+      "sha256": "f33b7c79453ac0cc1421db3388adbab85741ba420e131b0d4a4298670c94fdf6"
+    },
+    "usdt": {
+      "file": "usdt.svg",
+      "variant": "Tether logo formatted for circular displays",
+      "source_url": "https://tether.to/images/logoCircle.svg",
+      "authority_url": "https://tether.to/media/",
+      "license_or_usage": "Tether's media kit supplies this vector for circular displays and its trademark guidance requires supplied logos to remain clear, undistorted, and unaltered; follow the current Tether guidelines.",
+      "sha256": "7c9f13b068996186c4df0f3dcdeeeb86e11cee6d8a9e7597cec19ccee164d7c5"
+    },
+    "base": {
+      "file": "base.svg",
+      "variant": "Base square mark, blue",
+      "source_url": "https://raw.githubusercontent.com/base/brand-kit/main/logo/TheSquare/Digital/Base_square_blue.svg",
+      "authority_url": "https://github.com/base/brand-kit",
+      "license_or_usage": "Official Base brand-kit repository asset. The repository does not publish a license file; preserve the supplied mark and follow the current Base brand guidance.",
+      "sha256": "b4f2b487011713f98481cc53c4ce095629b4876acbdbc2f0f3ad69a9688ba82e"
+    },
+    "metamask": {
+      "file": "metamask.svg",
+      "variant": "MetaMask Fox icon",
+      "source_url": "https://images.ctfassets.net/clixtyxoaeas/1ezuBGezqfIeifWdVtwU4c/d970d4cdf13b163efddddd5709164d2e/MetaMask-icon-Fox.svg",
+      "authority_url": "https://metamask.io/assets",
+      "license_or_usage": "Official MetaMask asset served from the MetaMask assets page; follow MetaMask's current logo and trademark guidance.",
+      "sha256": "5ddcb06dbeba86fc593af5d50032c6839088f3fb21c6e66514b8f16f210d8d0a"
+    }
+  },
+  "sanitization": {
+    "status": "passed",
+    "details": "All six canonical SVGs passed xmllint validation. A case-insensitive scan found no script elements, href/xlink:href references, url() references, javascript URLs, or inline event-handler attributes. The canonical files are byte-preserving copies of the official SVG downloads; no design elements were modified."
+  },
+  "integration_note": "Accessible title metadata added where missing; geometry and colors preserved. SHA-256 values identify the original upstream downloads."
+}

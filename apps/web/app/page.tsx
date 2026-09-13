@@ -77,14 +77,14 @@ export default function HomePage() {
       <header className="siteHeader">
         <a aria-label="Trelp home" className="logo" href="#top">
           <BrandMark />
-          <span>TRELP</span>
         </a>
         <nav aria-label="Primary navigation">
           <a href="#structure">Structure</a>
           <a href="#mechanism">Mechanism</a>
           <a href="#risk">Risk</a>
+          <a href="/resources">Resources</a>
         </nav>
-        <a className="headerCta" href="/app">
+        <a className="headerCta" href="/dashboard">
           Launch app <ArrowMark />
         </a>
       </header>
@@ -308,18 +308,20 @@ export default function HomePage() {
             <em>risk level.</em>
           </h2>
           <p>Compare Senior and Junior vaults in one place.</p>
-          <a className="button buttonLight" href="/app">
-            Explore vaults <ArrowMark />
+          <a className="button buttonLight" href="/dashboard">
+            Open dashboard <ArrowMark />
           </a>
         </Reveal>
       </section>
 
       <footer>
-        <a className="logo footerLogo" href="#top">
+        <a aria-label="Trelp home" className="logo footerLogo" href="#top">
           <BrandMark />
-          <span>TRELP</span>
         </a>
         <p className="footerTagline">Liquidity, divided by risk.</p>
+        <a className="footerResources" href="/resources">
+          Resources ↗
+        </a>
         <p className="footerCopyright">© 2026 Trelp</p>
       </footer>
     </main>

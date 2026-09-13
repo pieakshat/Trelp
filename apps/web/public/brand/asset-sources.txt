@@ -1,0 +1,34 @@
+Trelp visual assets
+
+Trelp mark: existing project identity, exported as SVG. Vault structure: original Trelp illustration.
+Third-party marks identify their respective assets/networks and do not imply endorsement.
+
+ETHEREUM
+https://ethereum.org/assets
+https://ethereum.org/images/assets/svgs/eth-diamond-purple.svg
+Ethereum.org terms say non-code content is CC BY 4.0 unless marked otherwise; Ethereum/Foundation marks remain trademarks, so follow the official terms and brand guidance.
+
+USDC
+https://www.circle.com/pressroom
+https://6778953.fs1.hubspotusercontent-na1.net/hubfs/6778953/Pressroom/brandkit/logo-downloads/usdc.zip (Token Logo/USDC Token.svg)
+Circle's pressroom provides this as an approved USDC brand asset and asks users to use approved logos as provided; follow Circle's brand use policy.
+
+WBTC
+https://wbtc.network/brandKit
+https://wbtc.network/brandkit/logo2-black.svg
+WBTC's brand kit says not to edit, change, distort, recolor, crop, or reconfigure the supplied logo; this file is unchanged from the official download.
+
+USDT
+https://tether.to/media/
+https://tether.to/images/logoCircle.svg
+Tether's media kit supplies this vector for circular displays and its trademark guidance requires supplied logos to remain clear, undistorted, and unaltered; follow the current Tether guidelines.
+
+BASE
+https://github.com/base/brand-kit
+https://raw.githubusercontent.com/base/brand-kit/main/logo/TheSquare/Digital/Base_square_blue.svg
+Official Base brand-kit repository asset. The repository does not publish a license file; preserve the supplied mark and follow the current Base brand guidance.
+
+METAMASK
+https://metamask.io/assets
+https://images.ctfassets.net/clixtyxoaeas/1ezuBGezqfIeifWdVtwU4c/d970d4cdf13b163efddddd5709164d2e/MetaMask-icon-Fox.svg
+Official MetaMask asset served from the MetaMask assets page; follow MetaMask's current logo and trademark guidance.

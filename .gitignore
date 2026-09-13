@@ -38,3 +38,7 @@ contracts/broadcast/
 .idea/
 .vscode/
 *.swp
+
+# Browser test output
+playwright-report/
+test-results/

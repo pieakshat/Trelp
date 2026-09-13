@@ -8,11 +8,12 @@ export function BrandMark({ className }: BrandMarkProps) {
       aria-hidden="true"
       className={className}
       fill="none"
-      viewBox="0 0 42 42"
+      viewBox="0 0 64 64"
     >
-      <path d="M3 4h36L21 38 3 4Z" fill="currentColor" />
-      <path d="m11 11 10 19 10-19H11Z" fill="white" />
-      <path d="m16 15 5 10 5-10H16Z" fill="currentColor" />
+      <rect width="64" height="64" rx="16" fill="var(--red)" />
+      <path d="M12 14h40L32 53 12 14Z" fill="#fff" />
+      <path d="m22 23 10 20 10-20H22Z" fill="var(--red)" />
+      <path d="m28 27 4 9 4-9h-8Z" fill="#fff" />
     </svg>
   );
 }
