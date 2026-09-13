@@ -30,6 +30,7 @@ import {TrancheHook} from "../src/venues/TrancheHook.sol";
 import {V4PositionVenue} from "../src/venues/V4PositionVenue.sol";
 import {HookMiner} from "../test/utils/HookMiner.sol";
 import {MockV3Pool} from "../test/mocks/Mocks.sol";
+import {OracleSwapper} from "./support/DemoSupport.sol";
 
 interface IV3PoolSlot0 {
     function slot0() external view returns (uint160, int24, uint16, uint16, uint16, uint8, bool);
@@ -42,31 +43,6 @@ contract HookDeployer {
         returns (address)
     {
         return address(new TrancheHook{salt: salt}(m, v, admin_));
-    }
-}
-
-/// @dev Fills at the oracle mark so seeding and liquidation follow the simulated market.
-contract OracleSwapper is ISpotSwapper {
-    IQuoteOracle public immutable oracle;
-    address public immutable quote;
-    address public immutable risky;
-
-    constructor(IQuoteOracle oracle_, address quote_, address risky_) {
-        oracle = oracle_;
-        quote = quote_;
-        risky = risky_;
-    }
-
-    function swapExactIn(address tokenIn, address tokenOut, uint256 amountIn, uint256 minOut)
-        external
-        returns (uint256 amountOut)
-    {
-        ERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
-        amountOut = tokenIn == risky
-            ? oracle.valueInQuote(risky, amountIn)
-            : (amountIn * 1e18) / oracle.valueInQuote(risky, 1e18);
-        require(amountOut >= minOut, "minOut");
-        ERC20(tokenOut).transfer(msg.sender, amountOut);
     }
 }
 
