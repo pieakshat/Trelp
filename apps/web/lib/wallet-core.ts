@@ -1,6 +1,6 @@
 import type { PrivyClientConfig } from "@privy-io/react-auth";
 import type { Hash } from "viem";
-import { anvil, base, mainnet, sepolia } from "viem/chains";
+import { anvil, base, baseSepolia, mainnet, sepolia } from "viem/chains";
 
 export type WalletProviderRequest = {
   method: string;
@@ -24,7 +24,7 @@ export type ConfirmedReceipt = {
   fee: bigint | null;
 };
 
-const chains = [mainnet, base, sepolia, anvil] as const;
+const chains = [mainnet, base, baseSepolia, sepolia, anvil] as const;
 type PrivyChain = NonNullable<PrivyClientConfig["defaultChain"]>;
 
 export function privyChain(chainId: number): PrivyChain {

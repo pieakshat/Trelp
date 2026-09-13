@@ -49,6 +49,7 @@ const WalletContext = createContext<WalletContextValue | null>(null);
 const networks = [
   { id: 1, name: "Ethereum" },
   { id: 8453, name: "Base" },
+  { id: 84532, name: "Base Sepolia" },
   { id: 11155111, name: "Sepolia" },
   { id: 31337, name: "Anvil" },
 ];
@@ -63,9 +64,11 @@ export function explorerUrl(
       ? "etherscan.io"
       : chainId === 8453
         ? "basescan.org"
-        : chainId === 11155111
-          ? "sepolia.etherscan.io"
-          : null;
+        : chainId === 84532
+          ? "sepolia.basescan.org"
+          : chainId === 11155111
+            ? "sepolia.etherscan.io"
+            : null;
   const valid = new RegExp(`^0x[0-9a-fA-F]{${kind === "tx" ? 64 : 40}}$`).test(
     value,
   );
