@@ -52,12 +52,18 @@ export async function getVaultState(input: unknown = {}) {
           request as Parameters<typeof runtime.client.readContract>[0],
         ) as Promise<never>,
     };
-    const snapshot = await readVaultSnapshot(
-      reader,
-      runtime.config.deployment,
-      parsed.account ? getAddress(parsed.account) : undefined,
-    );
-    return { ok: true as const, snapshot };
+    const [snapshot, block] = await Promise.all([
+      readVaultSnapshot(
+        reader,
+        runtime.config.deployment,
+        parsed.account ? getAddress(parsed.account) : undefined,
+      ),
+      runtime.client.getBlock(),
+    ]);
+    return {
+      ok: true as const,
+      snapshot: { ...snapshot, blockTimestamp: block.timestamp },
+    };
   } catch (error) {
     return {
       ok: false as const,

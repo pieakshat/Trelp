@@ -1,6 +1,6 @@
 # Trelp web
 
-The product UI reads one deployed `TrancheVault`, its Senior and Junior claim tokens, quote token, managed position, and vault events. Depositors approve quote tokens only when required, deposit during Subscription, and redeem claim tokens after settlement. Curator drafts are optional and remain browser-local.
+The product UI reads one deployed `TrancheVault`, its Senior and Junior claim tokens, quote token, managed position, and vault events. Depositors approve quote tokens only when required, deposit during Subscription, and redeem claim tokens after settlement. Curator operations are sent only by the configured curator wallet when their on-chain conditions are satisfied.
 
 ## Configure a deployment
 

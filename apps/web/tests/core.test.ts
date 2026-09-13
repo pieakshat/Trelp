@@ -1,22 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { draftSchema, preferencesSchema } from "../lib/local-data";
+import { preferencesSchema } from "../lib/local-data";
 import { AuthService } from "../lib/server/auth-core";
 
-test("local curator drafts and preferences reject invalid records", () => {
-  assert.equal(
-    draftSchema.safeParse({
-      name: "ETH Income",
-      asset: "ETH / USDC",
-      network: "Base",
-      duration: 30,
-      buffer: 30,
-      capacity: 100_000,
-      riskAccepted: true,
-    }).success,
-    true,
-  );
+test("local preferences reject invalid records", () => {
   assert.equal(
     preferencesSchema.safeParse({
       hideBalances: true,
@@ -25,7 +13,6 @@ test("local curator drafts and preferences reject invalid records", () => {
     }).success,
     true,
   );
-  assert.equal(draftSchema.safeParse({ name: "Bad" }).success, false);
 });
 
 test("wallet authentication verifies the signer and consumes challenges once", async () => {

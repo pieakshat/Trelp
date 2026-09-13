@@ -58,17 +58,31 @@ test("live devnet state drives dashboard, activity, and interactive transparency
   await expect(page.getByRole("table")).toContainText("300K USDC");
 });
 
-test("curator drafts stay local and preserve the live vault boundary", async ({
+test("curator page exposes only gated contract operations", async ({
   page,
 }) => {
   await page.goto("/create");
-  await page.getByLabel("Vault name").fill("ETH Income Devnet");
-  await page.getByLabel(/I understand that both risk levels/).check();
-  await page.getByRole("button", { name: /Review draft/ }).click();
-  await page.getByRole("button", { name: "Save local draft" }).click();
-  await expect(page.getByRole("table")).toContainText("ETH Income Devnet");
-  await page.reload();
-  await expect(page.getByRole("table")).toContainText("ETH Income Devnet");
+  await expect(
+    page.getByRole("heading", { name: "Curator operations" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Rebalance range" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Call buffer" }),
+  ).toBeDisabled();
+  await expect(page.locator("main")).not.toContainText(/local draft/i);
+});
+
+test("resources contain vault documentation instead of brand downloads", async ({
+  page,
+}) => {
+  await page.goto("/resources");
+  await expect(
+    page.getByRole("heading", { name: "Vault documentation" }),
+  ).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Trelp asset kit");
+  await expect(page.locator("main")).not.toContainText("SVG");
 });
 
 test("mobile navigation, devnet wallet, resources, and unknown routes remain usable", async ({
@@ -131,6 +145,9 @@ test("dashboard uses compact values and a proportional capital strip", async ({
     page.getByRole("heading", { name: "Your vault, at a glance." }),
   ).toBeVisible();
   await expect(page.locator(".dashboardMetrics")).toContainText("1M USDC");
+  await expect(
+    page.locator('.dashboardMetrics .tokenAmount img[src*="usdc.svg"]'),
+  ).toHaveCount(3);
   await expect(page.locator("main")).not.toContainText("1,000,000");
   await expect(
     page.getByRole("link", { name: "Dashboard", exact: true }),
@@ -318,6 +335,14 @@ test("portfolio and activity values carry their token identity", async ({
   await expect(
     page.locator(".dataTable .tokenAmount img").first(),
   ).toBeVisible();
+});
+
+test("workspace token values use compact notation from one thousand", async ({
+  page,
+}) => {
+  await page.goto("/portfolio");
+  await expect(page.locator("main")).toContainText("5K USDC");
+  await expect(page.locator("main")).not.toContainText("5,000.06");
 });
 
 test("returns stay explicitly pending before contract terms exist", async ({

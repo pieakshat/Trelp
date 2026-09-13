@@ -8,7 +8,7 @@ import {
   units,
   VaultBoundary,
 } from "@/components/app/protocol-ui";
-import { AssetMark, Badge } from "@/components/app/ui";
+import { AssetMark, Badge, TokenAmount } from "@/components/app/ui";
 import { WalletButton } from "@/components/app/wallet-provider";
 import {
   compactTokenAmount,
@@ -100,17 +100,29 @@ export default function DashboardPage() {
             <section className="dashboardMetrics" aria-label="Vault summary">
               <div>
                 <span>Net asset value</span>
-                <strong>{compactUnits(vault.nav)}</strong>
+                <strong>
+                  <TokenAmount token={vault.quote.symbol}>
+                    {compactUnits(vault.nav)}
+                  </TokenAmount>
+                </strong>
                 <small>Live vault value</small>
               </div>
               <div>
                 <span>Senior value</span>
-                <strong>{compactUnits(pools.senior)}</strong>
+                <strong>
+                  <TokenAmount token={vault.quote.symbol}>
+                    {compactUnits(pools.senior)}
+                  </TokenAmount>
+                </strong>
                 <small>Payment priority</small>
               </div>
               <div>
                 <span>Junior value</span>
-                <strong>{compactUnits(pools.junior)}</strong>
+                <strong>
+                  <TokenAmount token={vault.quote.symbol}>
+                    {compactUnits(pools.junior)}
+                  </TokenAmount>
+                </strong>
                 <small>Residual capital</small>
               </div>
               <div>

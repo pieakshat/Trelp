@@ -21,6 +21,30 @@ export function phaseCapabilities(phase: VaultPhase) {
   };
 }
 
+export function curatorCapabilities(input: {
+  phase: VaultPhase;
+  isCurator: boolean;
+  bufferShipped: boolean;
+  coverageWad: bigint | null;
+  minRebalanceCoverageWad: bigint;
+  lastRebalanceAt: bigint;
+  rebalanceCooldown: bigint;
+  blockTimestamp: bigint;
+}) {
+  const active = input.phase === 1 && input.isCurator;
+  const cooldownComplete =
+    input.lastRebalanceAt === 0n ||
+    input.blockTimestamp >= input.lastRebalanceAt + input.rebalanceCooldown;
+  return {
+    canCallBuffer: active && input.bufferShipped,
+    canRebalance:
+      active &&
+      cooldownComplete &&
+      input.coverageWad !== null &&
+      input.coverageWad >= input.minRebalanceCoverageWad,
+  };
+}
+
 export function parseTokenAmount(value: string, decimals: number) {
   const amount = value.trim();
   if (!/^\d+(\.\d+)?$/.test(amount))
@@ -40,8 +64,9 @@ export function compactTokenAmount(value: bigint, decimals: number) {
   const amount = Number(formatUnits(value, decimals));
   return Number.isFinite(amount)
     ? new Intl.NumberFormat("en-US", {
-        notation: "compact",
-        maximumFractionDigits: 2,
+        notation: Math.abs(amount) >= 1_000 ? "compact" : "standard",
+        maximumFractionDigits:
+          Math.abs(amount) > 0 && Math.abs(amount) < 1 ? decimals : 2,
       }).format(amount)
     : formatUnits(value, decimals);
 }

@@ -42,6 +42,24 @@ const common = {
   unwindCost: 0n,
   rebalanceCost: 1_000_000n,
   rebalanceCount: 2,
+  lastRebalanceAt: 1_100_000n,
+  config: [
+    10_000_000_000_000_000n,
+    700_000_000_000_000_000n,
+    15_000_000_000_000_000n,
+    50_000_000_000_000_000n,
+    600_000_000_000_000_000n,
+    0n,
+    100_000_000_000_000_000n,
+    200_000_000_000_000_000n,
+    10_000_000_000_000_000n,
+    [0n, 0n, 0n, 0n, 0n, 0n],
+    1_000_000n,
+    2_592_000n,
+    86_400n,
+    86_400n,
+    21_600n,
+  ],
   symbol: "USDC",
   decimals: 6,
   balanceOf: 8_000_000n,
@@ -83,6 +101,7 @@ test("active vault reads ABI state and connected-wallet balances", async () => {
   assert.equal(snapshot.account?.quoteBalance, 8_000_000n);
   assert.equal(snapshot.account?.allowance, 3_000_000n);
   assert.equal(snapshot.position?.tickLower, -120);
+  assert.equal(snapshot.config.rebalanceCooldown, 21_600n);
   assert.ok(fake.calls.includes("coverageWad"));
 });
 

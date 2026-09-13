@@ -20,6 +20,24 @@ export type VaultReader = {
   read: <T>(input: ReadInput) => Promise<T>;
 };
 
+type VaultConfigRead = readonly [
+  bigint,
+  bigint,
+  bigint,
+  bigint,
+  bigint,
+  bigint,
+  bigint,
+  bigint,
+  bigint,
+  readonly [bigint, bigint, bigint, bigint, bigint, bigint],
+  bigint,
+  bigint,
+  bigint,
+  bigint,
+  bigint,
+];
+
 export type VaultSnapshot = Awaited<ReturnType<typeof readVaultSnapshot>>;
 
 async function optional<T>(read: () => Promise<T>) {
@@ -58,6 +76,8 @@ export async function readVaultSnapshot(
     unwindCost,
     rebalanceCost,
     rebalanceCount,
+    lastRebalanceAt,
+    config,
   ] = await Promise.all([
     readVault<number>("phase"),
     readVault<Address>("quote"),
@@ -78,6 +98,8 @@ export async function readVaultSnapshot(
     readVault<bigint>("unwindCost"),
     readVault<bigint>("rebalanceCost"),
     readVault<number>("rebalanceCount"),
+    readVault<bigint>("lastRebalanceAt"),
+    readVault<VaultConfigRead>("config"),
   ]);
   if (![0, 1, 2, 3].includes(phaseValue))
     throw new Error("The vault returned an unknown phase.");
@@ -211,6 +233,12 @@ export async function readVaultSnapshot(
     unwindCost,
     rebalanceCost,
     rebalanceCount,
+    lastRebalanceAt,
+    config: {
+      minRebalanceCoverageWad: config[7],
+      subscriptionEnd: config[10],
+      rebalanceCooldown: config[14],
+    },
     buffer: {
       strategy: bufferStrategy,
       app: bufferApp,

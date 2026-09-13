@@ -4,10 +4,7 @@ export default function ErrorPage({ reset }: { reset: () => void }) {
     <main className="appPage">
       <section className="panel uiEmpty">
         <h1>We couldn’t load this page</h1>
-        <p>
-          Your local preferences and drafts are safe. Try loading the live data
-          again.
-        </p>
+        <p>Your local preferences are safe. Try loading the live data again.</p>
         <button className="uiButton" type="button" onClick={reset}>
           Try again
         </button>

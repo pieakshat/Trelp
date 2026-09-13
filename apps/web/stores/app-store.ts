@@ -2,19 +2,10 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import {
-  type Draft,
-  type DraftInput,
-  draftSchema,
-  type Preferences,
-  preferencesSchema,
-} from "@/lib/local-data";
+import { type Preferences, preferencesSchema } from "@/lib/local-data";
 
 type AppState = {
-  drafts: Draft[];
   preferences: Preferences;
-  saveDraft: (input: DraftInput) => string;
-  removeDraft: (id: string) => void;
   setPreferences: (value: Preferences) => void;
 };
 
@@ -29,23 +20,7 @@ const storageWarning = () =>
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      drafts: [],
       preferences: defaults,
-      saveDraft: (input) => {
-        const parsed = draftSchema.parse(input);
-        const id = crypto.randomUUID();
-        set((state) => ({
-          drafts: [
-            { ...parsed, id, createdAt: new Date().toISOString() },
-            ...state.drafts,
-          ].slice(0, 100),
-        }));
-        return id;
-      },
-      removeDraft: (id) =>
-        set((state) => ({
-          drafts: state.drafts.filter((draft) => draft.id !== id),
-        })),
       setPreferences: (value) =>
         set({ preferences: preferencesSchema.parse(value) }),
     }),
@@ -77,7 +52,7 @@ export const useAppStore = create<AppState>()(
           }
         },
       })),
-      partialize: ({ drafts, preferences }) => ({ drafts, preferences }),
+      partialize: ({ preferences }) => ({ preferences }),
     },
   ),
 );

@@ -1,18 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { formatUnits } from "viem";
+import { compactTokenAmount } from "@/lib/vault-domain";
 import { type LiveVaultSnapshot, useVaultStore } from "@/stores/vault-store";
 import { explorerUrl } from "./wallet-provider";
 
 export function units(value: bigint, decimals: number, symbol?: string) {
-  const amount = Number(formatUnits(value, decimals));
-  const label = Number.isFinite(amount)
-    ? new Intl.NumberFormat("en-US", {
-        maximumFractionDigits: amount < 1 ? 6 : 2,
-        notation: Math.abs(amount) >= 100_000 ? "compact" : "standard",
-      }).format(amount)
-    : formatUnits(value, decimals);
+  const label = compactTokenAmount(value, decimals);
   return symbol ? `${label} ${symbol}` : label;
 }
 

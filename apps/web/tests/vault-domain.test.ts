@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   claimableAssets,
   compactTokenAmount,
+  curatorCapabilities,
   depositPlan,
   formatTokenAmount,
   formatWadPercent,
@@ -11,11 +12,45 @@ import {
   tranchePools,
 } from "../lib/vault-domain";
 
+test("curator writes stay locked until role and active-vault conditions match", () => {
+  const base = {
+    phase: 1 as const,
+    isCurator: true,
+    bufferShipped: true,
+    coverageWad: 300_000_000_000_000_000n,
+    minRebalanceCoverageWad: 200_000_000_000_000_000n,
+    lastRebalanceAt: 100n,
+    rebalanceCooldown: 50n,
+    blockTimestamp: 150n,
+  };
+  assert.deepEqual(curatorCapabilities(base), {
+    canCallBuffer: true,
+    canRebalance: true,
+  });
+  assert.equal(curatorCapabilities({ ...base, phase: 0 }).canRebalance, false);
+  assert.equal(
+    curatorCapabilities({ ...base, isCurator: false }).canCallBuffer,
+    false,
+  );
+  assert.equal(
+    curatorCapabilities({ ...base, blockTimestamp: 149n }).canRebalance,
+    false,
+  );
+  assert.equal(
+    curatorCapabilities({
+      ...base,
+      coverageWad: 199_999_999_999_999_999n,
+    }).canRebalance,
+    false,
+  );
+});
+
 test("dashboard token amounts use compact readable units", () => {
   assert.equal(compactTokenAmount(1_000_000_000_000n, 6), "1M");
   assert.equal(compactTokenAmount(700_000_000_000n, 6), "700K");
   assert.equal(compactTokenAmount(1_250_000_000_000n, 6), "1.25M");
   assert.equal(compactTokenAmount(0n, 6), "0");
+  assert.equal(compactTokenAmount(1n, 6), "0.000001");
 });
 
 test("token amounts remain exact in quote base units", () => {

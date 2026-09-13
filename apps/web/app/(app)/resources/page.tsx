@@ -16,12 +16,12 @@ const questions = [
     "Junior takes losses first. The listed buffer is the Junior share that can absorb losses before Senior principal is affected. Large enough losses can reach both tranches; no return is guaranteed.",
   ],
   [
-    "What is saved when I create a vault?",
-    "A local draft of the market, duration, capacity and risk split. A signed-in wallet can request a server-side validation of those terms. Neither step deploys a contract or publishes a live vault.",
+    "What does the curator control?",
+    "The curator address is fixed when a vault is deployed. It may rebalance an Active managed position within the contract’s coverage and cooldown limits, or call a shipped loss buffer. It cannot rewrite immutable vault terms.",
   ],
   [
-    "Can I use the factsheet for another vault?",
-    "Yes. The Word template is editable. Replace the illustrated terms with the terms you have verified for your vault, record your assumptions and review the final version before sharing it.",
+    "When are transactions available?",
+    "Deposits are available only during Subscription. Curator operations require the configured curator wallet and an Active vault. Redemptions open only after settlement. Disabled controls mean the contract conditions are not satisfied.",
   ],
 ];
 export default function ResourcesPage() {
@@ -31,11 +31,6 @@ export default function ResourcesPage() {
         label="The details matter"
         title="Resources"
         description="Clear terms. Better questions. A more informed first step."
-        action={
-          <Link href="/create" className="uiButton secondary">
-            Create a vault draft ↗
-          </Link>
-        }
       />
       <section className="resourcesHero">
         <div>
@@ -98,37 +93,27 @@ export default function ResourcesPage() {
           </div>
         </section>
         <section className="panel brandDownloads">
-          <Image
-            src="/brand/trelp-logo.svg"
-            width={168}
-            height={39}
-            alt="Trelp"
-          />
-          <h2>The Trelp asset kit.</h2>
+          <Badge tone="red">Live contract guide</Badge>
+          <h2>Vault documentation</h2>
           <p>
-            The original mark, ready to use. Vector assets stay sharp at every
-            size.
+            Read the live state first, verify contract activity, then use only
+            the transaction available for the current phase.
           </p>
-          <a href="/brand/trelp-logo.svg" download className="downloadRow">
-            <span>Primary wordmark</span>
-            <Badge>SVG ↓</Badge>
-          </a>
-          <a href="/brand/trelp-mark.svg" download className="downloadRow">
-            <span>Brand symbol</span>
-            <Badge>SVG ↓</Badge>
-          </a>
-          <a href="/brand/vault-structure.svg" download className="downloadRow">
-            <span>Vault illustration</span>
-            <Badge>SVG ↓</Badge>
-          </a>
-          <a
-            href="/brand/asset-sources.txt"
-            className="textButton"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Token logo sources ↗
-          </a>
+          <Link href="/dashboard" className="downloadRow">
+            <span>Vault state and lifecycle</span>
+            <Badge>Open ↗</Badge>
+          </Link>
+          <Link href="/transparency" className="downloadRow">
+            <span>Contracts, risks and returns</span>
+            <Badge>Open ↗</Badge>
+          </Link>
+          <Link href="/activity" className="downloadRow">
+            <span>Verified transaction history</span>
+            <Badge>Open ↗</Badge>
+          </Link>
+          <Link href="/create" className="textButton">
+            Curator operating conditions ↗
+          </Link>
         </section>
       </div>
     </main>
